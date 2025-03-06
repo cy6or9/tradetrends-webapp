@@ -13,13 +13,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import StockFilters from '../components/StockFilters.vue';
-import StockList from '../components/StockList.vue';
+import { onMounted } from 'vue';
+import { useStocksStore } from '@/stores/stocks';
+import StockFilters from '@/components/StockFilters.vue';
+import StockList from '@/components/StockList.vue';
 
-const filters = ref({});
+const store = useStocksStore();
+
+// Initialize test data when component mounts
+onMounted(() => {
+  store.initializeTestData();
+});
 
 function updateFilters(newFilters: any) {
-  filters.value = newFilters;
+  store.setFilters(newFilters);
 }
 </script>

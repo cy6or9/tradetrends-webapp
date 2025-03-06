@@ -18,6 +18,7 @@
     "@replit/vite-plugin-shadcn-theme-json": "^0.0.4",
     "@tanstack/vue-query": "^5.67.1",
     "@types/vue": "^1.0.31",
+    "@vitejs/plugin-react": "^4.3.4",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/compiler-sfc": "^3.5.13",
     "@vue/tsconfig": "^0.7.0",
@@ -52,7 +53,7 @@
     "vue-router": "^4.5.0",
     "wouter": "^3.3.5",
     "ws": "^8.18.0",
-    "zod": "^3.23.8",
+    "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
