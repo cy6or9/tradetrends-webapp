@@ -1,37 +1,21 @@
 <template>
   <div class="app">
-    <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
       <div class="container">
         <router-link class="navbar-brand" to="/">Stock Market Analysis</router-link>
-        <button 
-          class="navbar-toggler" 
-          type="button" 
-          data-bs-toggle="collapse" 
-          data-bs-target="#navbarNav"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav">
-            <li class="nav-item">
-              <router-link class="nav-link" to="/">Home</router-link>
-            </li>
-            <li class="nav-item">
-              <router-link class="nav-link" to="/favorites">Favorites</router-link>
-            </li>
-          </ul>
-        </div>
       </div>
     </nav>
 
-    <!-- Main Content -->
-    <router-view></router-view>
+    <div class="container py-4">
+      <h1>Welcome to Stock Market Analysis</h1>
+      <p>Loading components...</p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// App root component
+// Minimal setup to verify Vue 3 is working
+console.log('App component loaded');
 </script>
 
 <style>

@@ -35,7 +35,7 @@
 
 <script setup lang="ts">
 import { useQuery } from '@tanstack/vue-query';
-import type { StockNews } from '../lib/finnhub';
+import type { StockNews } from '@/lib/finnhub';
 
 const props = defineProps<{
   symbol: string

@@ -10,12 +10,14 @@
             <th>Change %</th>
             <th>Analyst Rating</th>
             <th>Volume</th>
+            <th>Market Cap</th>
             <th>Sector</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="isLoading">
-            <td colspan="7" class="text-center py-4">
+            <td colspan="9" class="text-center py-4">
               Loading stocks...
             </td>
           </tr>
@@ -43,8 +45,18 @@
                   {{ stock.analystRating }}%
                 </span>
               </td>
-              <td>{{ (stock.volume / 1000000).toFixed(1) }}M</td>
+              <td>{{ (stock.volume / 1e6).toFixed(1) }}M</td>
+              <td>${{ (stock.marketCap / 1e9).toFixed(2) }}B</td>
               <td>{{ stock.sector }}</td>
+              <td>
+                <button 
+                  class="btn btn-sm btn-outline-primary"
+                  @click="toggleFavorite(stock)"
+                  :title="stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+                >
+                  <i class="bi" :class="stock.isFavorite ? 'bi-star-fill' : 'bi-star'"></i>
+                </button>
+              </td>
             </tr>
           </template>
         </tbody>
@@ -56,18 +68,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
-import type { Stock } from '@shared/schema';
+import { useStocksStore } from '@/stores/stocks';
+import type { Stock } from '@/lib/types';
 
-const props = defineProps<{
-  filters: {
-    minPrice?: string;
-    maxPrice?: string;
-    minAnalystRating?: string;
-    sectors?: string;
-    sortBy?: string;
-    sortDir?: 'asc' | 'desc';
-  }
-}>();
+const store = useStocksStore();
 
 const { data: stocks, isLoading } = useQuery<Stock[]>({
   queryKey: ['stocks'],
@@ -75,35 +79,35 @@ const { data: stocks, isLoading } = useQuery<Stock[]>({
     const response = await fetch('/api/stocks');
     if (!response.ok) throw new Error('Failed to fetch stocks');
     return response.json();
-  }
+  },
+  refetchInterval: 30000 // Refresh every 30 seconds
 });
 
 const filteredStocks = computed(() => {
   if (!stocks.value) return [];
-
-  let filtered = stocks.value.filter(stock => {
-    if (props.filters.minPrice && stock.price < parseFloat(props.filters.minPrice)) return false;
-    if (props.filters.maxPrice && stock.price > parseFloat(props.filters.maxPrice)) return false;
-    if (props.filters.minAnalystRating && stock.analystRating < parseFloat(props.filters.minAnalystRating)) return false;
-    if (props.filters.sectors && stock.sector !== props.filters.sectors) return false;
-    return true;
-  });
-
-  if (props.filters.sortBy) {
-    filtered.sort((a, b) => {
-      const aVal = a[props.filters.sortBy as keyof Stock];
-      const bVal = b[props.filters.sortBy as keyof Stock];
-      return props.filters.sortDir === 'asc' ? 
-        (aVal > bVal ? 1 : -1) : 
-        (aVal < bVal ? 1 : -1);
-    });
-  }
-
-  return filtered;
+  return store.filteredStocks;
 });
+
+async function toggleFavorite(stock: Stock) {
+  try {
+    await store.toggleFavorite(stock);
+  } catch (error) {
+    console.error('Failed to toggle favorite:', error);
+  }
+}
 </script>
 
 <style scoped>
+.table th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge {
+  font-size: 0.875rem;
+  padding: 0.35em 0.65em;
+}
+
 .bi {
   font-size: 0.875rem;
 }

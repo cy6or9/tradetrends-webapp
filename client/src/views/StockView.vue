@@ -11,7 +11,7 @@
             {{ stock.analystRating }}% Buy
           </span>
         </h1>
-        
+
         <div class="d-flex align-items-center gap-3">
           <h2 class="mb-0">${{ stock.price.toFixed(2) }}</h2>
           <span :class="stock.changePercent > 0 ? 'text-success' : 'text-danger'">
@@ -120,8 +120,8 @@ import { useRoute } from 'vue-router';
 import { useQuery } from '@tanstack/vue-query';
 import StockChart from '../components/StockChart.vue';
 import StockNews from '../components/StockNews.vue';
-import type { Stock } from '@shared/schema';
-import type { StockAnalysis } from '../lib/mistral';
+import type { Stock } from '@/lib/types';
+import type { StockAnalysis } from '@/lib/mistral';
 
 const route = useRoute();
 const symbol = route.params.symbol as string;
