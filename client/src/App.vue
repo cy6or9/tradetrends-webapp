@@ -1,5 +1,6 @@
 <template>
   <div class="app">
+    <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
       <div class="container">
         <router-link class="navbar-brand" to="/">Stock Market Analysis</router-link>
@@ -24,6 +25,7 @@
       </div>
     </nav>
 
+    <!-- Main Content -->
     <router-view></router-view>
   </div>
 </template>
