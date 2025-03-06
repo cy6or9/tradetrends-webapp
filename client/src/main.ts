@@ -18,3 +18,6 @@ app.use(VueQueryPlugin);
 
 // Mount app
 app.mount('#app');
+
+// Log successful mount for debugging
+console.log('Vue app mounted successfully');
