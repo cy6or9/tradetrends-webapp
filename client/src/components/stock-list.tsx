@@ -37,10 +37,23 @@ interface StockListProps {
   setStocks?: (stocks: any[]) => void;
 }
 
+// Add optimized loading handling
+const LoadingSpinner = () => (
+  <div className="p-8 text-center text-muted-foreground">
+    <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+    <p>Loading stocks...</p>
+    <p className="text-sm text-muted-foreground mt-2">
+      This may take a moment as we gather real-time market data
+    </p>
+  </div>
+);
+
 export function StockList({ filters, setStocks }: StockListProps) {
   const { data: stocks, isLoading } = useQuery({
     queryKey: ["/api/stocks", filters],
     queryFn: getAllUsStocks,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    cacheTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
   const [sort, setSort] = useState<{sortBy: string, sortDir: "asc" | "desc"} | null>(null);
@@ -61,12 +74,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, [stocks, setStocks]);
 
   if (isLoading) {
-    return (
-      <div className="p-8 text-center text-muted-foreground">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-        Loading stocks...
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (!stocks?.length) {

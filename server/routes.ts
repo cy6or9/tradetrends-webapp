@@ -13,9 +13,13 @@ import { ZodError } from "zod";
 // Finnhub API configuration
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const RATE_LIMIT_DELAY = 2000; // 2 seconds between requests
+// Update cache settings and batch processing
+const RATE_LIMIT_DELAY = 1000; // Reduce delay between requests
+const MAX_CACHE_AGE = 15 * 60 * 1000; // Extend max cache age to 15 minutes
+const CACHE_TTL = 5 * 60 * 1000; // Increase cache time to 5 minutes
+const BATCH_SIZE = 10; // Increase batch size for faster loading
 const MAX_RETRIES = 5;
-const MAX_CACHE_AGE = 5 * 60 * 1000; // 5 minutes
+
 
 // Get Finnhub secret from environment
 const FINNHUB_SECRET = process.env.EXPECTED_WEBHOOK_SECRET;
@@ -25,7 +29,7 @@ if (!FINNHUB_SECRET) {
 
 // In-memory caches with timestamps
 const stockCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL = 60000; // 1 minute cache TTL
+
 
 // Store connected clients
 const clients = new Set<WebSocket>();
@@ -35,6 +39,7 @@ function log(message: string, source = 'server') {
   console.log(`[${timestamp}] [${source}]: ${message}`);
 }
 
+// Update the finnhubRequest function to be more cache-friendly
 async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<any> {
   const cacheKey = `finnhub_${endpoint}`;
   const cached = stockCache.get(cacheKey);
@@ -42,6 +47,14 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
   // Return cached data if it's still fresh
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     log(`Using cached data for ${endpoint}`, 'cache');
+    return cached.data;
+  }
+
+  // Return stale cache data if we have it while fetching new data in background
+  if (cached && Date.now() - cached.timestamp < MAX_CACHE_AGE) {
+    // Fetch fresh data in background
+    finnhubRequest(endpoint, 1).catch(console.error);
+    log(`Using stale cache for ${endpoint} while refreshing`, 'cache');
     return cached.data;
   }
 
@@ -54,11 +67,9 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
       log(`Request to Finnhub: ${endpoint} (attempt ${i + 1}/${retries})`, 'api');
       const response = await fetch(fullUrl);
 
-      log(`Response status: ${response.status} for ${endpoint}`, 'api');
-
       // Handle rate limiting with exponential backoff
       if (response.status === 429) {
-        const delay = RATE_LIMIT_DELAY * Math.pow(2, i);
+        const delay = RATE_LIMIT_DELAY * Math.pow(1.5, i);
         log(`Rate limited, waiting ${delay}ms`, 'api');
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
@@ -70,29 +81,27 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
 
       const data = await response.json();
       stockCache.set(cacheKey, { data, timestamp: Date.now() });
-      log(`Cached response for ${endpoint}`, 'cache');
       return data;
 
     } catch (error) {
       lastError = error;
-      log(`Request failed for ${endpoint}: ${error}`, 'error');
-
       if (i < retries - 1) {
-        const delay = RATE_LIMIT_DELAY * Math.pow(2, i);
+        const delay = RATE_LIMIT_DELAY * Math.pow(1.5, i);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
 
-  // Return stale cache data if available rather than failing
-  if (cached && Date.now() - cached.timestamp < MAX_CACHE_AGE) {
-    log(`Using stale cache for ${endpoint}`, 'cache');
+  // Return stale cache as fallback if available
+  if (cached) {
+    log(`Using stale cache as fallback for ${endpoint}`, 'cache');
     return cached.data;
   }
 
   throw lastError;
 }
 
+// Update the searchAndFilterStocks function to use progressive loading
 async function searchAndFilterStocks(req: any, res: any) {
   try {
     log('Starting stock search...', 'search');
@@ -117,15 +126,20 @@ async function searchAndFilterStocks(req: any, res: any) {
     log(`Filtered to ${activeStocks.length} active stocks`, 'search');
 
     const stocks = [];
-    // Increase batch size but stay within API rate limits
-    const BATCH_SIZE = 5; // Process 5 stocks at once to speed up loading
-
+    // Process stocks in larger batches with smart throttling
     for (let i = 0; i < activeStocks.length; i += BATCH_SIZE) {
       const batch = activeStocks.slice(i, i + BATCH_SIZE);
       log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(activeStocks.length/BATCH_SIZE)}`, 'search');
 
       const batchPromises = batch.map(async (stock) => {
         try {
+          // Check cache first
+          const cacheKey = `stock_${stock.symbol}`;
+          const cached = stockCache.get(cacheKey);
+          if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            return cached.data;
+          }
+
           const [quote, profile] = await Promise.all([
             finnhubRequest(`/quote?symbol=${stock.symbol}`),
             finnhubRequest(`/stock/profile2?symbol=${stock.symbol}`)
@@ -153,8 +167,7 @@ async function searchAndFilterStocks(req: any, res: any) {
             lastUpdate: new Date().toISOString()
           };
 
-          // Cache the stock data
-          stockCache.set(`stock_${stock.symbol}`, {
+          stockCache.set(cacheKey, {
             data: stockData,
             timestamp: Date.now()
           });
@@ -169,7 +182,7 @@ async function searchAndFilterStocks(req: any, res: any) {
       const batchResults = await Promise.all(batchPromises);
       stocks.push(...batchResults.filter(Boolean));
 
-      // Add delay between batches to respect rate limits
+      // Adaptive throttling based on rate limiting
       if (i + BATCH_SIZE < activeStocks.length) {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
