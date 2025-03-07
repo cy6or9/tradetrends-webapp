@@ -1,3 +1,8 @@
+// Add this at the top of the file
+if (!process.env.FINNHUB_API_KEY) {
+  throw new Error('FINNHUB_API_KEY environment variable is not set');
+}
+
 import { type Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -15,10 +20,9 @@ const MAX_RETRIES = 3;
 
 // In-memory caches
 const stockCache = new Map<string, any>();
-const cryptoCache = new Map<string, any>();
 const CACHE_TTL = 60000; // 1 minute cache TTL
 
-// Connected WebSocket clients
+// WebSocket clients
 const clients = new Set<WebSocket>();
 
 function log(message: string, source = 'server') {
@@ -91,10 +95,10 @@ async function searchAndFilterStocks(req: any, res: any) {
     }
 
     // Filter active stocks
-    const activeStocks = symbols.filter(stock => 
+    const activeStocks = symbols.filter(stock =>
       stock.type === 'Common Stock' &&
       (!exchange || stock.exchange === exchange) &&
-      (!query || 
+      (!query ||
         stock.symbol.toLowerCase().includes(query.toString().toLowerCase()) ||
         stock.description.toLowerCase().includes(query.toString().toLowerCase()))
     );
@@ -169,8 +173,8 @@ async function searchAndFilterStocks(req: any, res: any) {
         const bVal = b[field];
 
         if (typeof aVal === 'string' && typeof bVal === 'string') {
-          return order === 'desc' 
-            ? bVal.localeCompare(aVal) 
+          return order === 'desc'
+            ? bVal.localeCompare(aVal)
             : aVal.localeCompare(bVal);
         }
 
@@ -235,7 +239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     log('Client connected', 'websocket');
     clients.add(ws);
 
-    // Heartbeat
+    // Heartbeat to keep connection alive
     const heartbeat = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.ping();
@@ -271,54 +275,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }, 30000);
 
-  // API routes
+  // Register the API routes
   app.get("/api/stocks/search", searchAndFilterStocks);
 
-  app.get("/api/finnhub/crypto/candle", async (req: any, res: any) => {
-    const { symbol, resolution } = req.query;
-    if (!symbol || !resolution) {
-      return res.status(400).json({ error: 'Missing parameters' });
-    }
-
-    try {
-      const to = Math.floor(Date.now() / 1000);
-      const from = to - 86400; // 24 hours ago
-
-      // Check cache
-      const cacheKey = `crypto_${symbol}_${from}_${to}`;
-      const cached = cryptoCache.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        return res.json(cached.data);
-      }
-
-      const data = await finnhubRequest(`/crypto/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}`);
-
-      if (data && data.s !== 'no_data' && Array.isArray(data.c)) {
-        cryptoCache.set(cacheKey, {
-          data,
-          timestamp: Date.now()
-        });
-      }
-
-      res.json(data);
-    } catch (error) {
-      log(`Crypto error: ${error}`, 'error');
-      res.status(500).json({ error: 'Failed to fetch crypto data' });
-    }
-  });
-
-  // Add the remaining routes
+  // IPO Calendar route
   app.get("/api/finnhub/calendar/ipo", async (_req: any, res: any) => {
     try {
       const data = await finnhubRequest('/calendar/ipo');
-      res.json(data);
+      if (!data || !data.ipoCalendar) {
+        return res.json([]);
+      }
+      res.json(data.ipoCalendar);
     } catch (error) {
       log(`IPO calendar error: ${error}`, 'error');
       res.status(500).json({ error: 'Failed to fetch IPO calendar' });
     }
   });
-
-  app.get("/api/finnhub/quote", (req: any, res: any) => {
+    app.get("/api/finnhub/quote", (req: any, res: any) => {
     const symbol = req.query.symbol as string;
     if (!symbol) {
       return res.status(400).json({ error: 'Symbol parameter is required' });
@@ -423,5 +396,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-// Add crypto data cache
-const cryptoDataCache = new Map<string, any>();
+// Add crypto data cache (This part was already in the original code, no need to add again)
+//const cryptoDataCache = new Map<string, any>();

@@ -34,31 +34,27 @@ const TabButton: React.FC<TabButtonProps> = ({ active, onClick, children }) => (
 export function MarketTabs() {
   const [activeTab, setActiveTab] = useState<'crypto' | 'ipo' | 'spac'>('crypto');
 
-  // Fetch quotes for each crypto symbol
-  const cryptoQueries = CRYPTO_SYMBOLS.map(symbol => ({
-    queryKey: ['crypto', symbol],
-    queryFn: () => getCryptoQuote(symbol),
-    retry: 3,
-    retryDelay: (attemptIndex: number) => Math.min(1000 * Math.pow(2, attemptIndex), 30000),
-    refetchInterval: 10000 // Refresh every 10 seconds
-  }));
-
-  const cryptoResults = cryptoQueries.map(query => useQuery(query));
-
-  const { data: ipoEvents = [], isLoading: iposLoading } = useQuery<IpoEvent[]>({
+  // Fetch IPO calendar data
+  const { data: ipoEvents = [], isLoading: iposLoading, error: ipoError } = useQuery<IpoEvent[]>({
     queryKey: ['ipos'],
     queryFn: getIpoCalendar,
-    refetchInterval: 60000 * 5 // Refresh every 5 minutes
+    refetchInterval: 60000 * 5, // Refresh every 5 minutes
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000)
   });
 
-  const { data: spacs = [], isLoading: spacsLoading } = useQuery<Spac[]>({
+  // Fetch SPAC data
+  const { data: spacs = [], isLoading: spacsLoading, error: spacError } = useQuery<Spac[]>({
     queryKey: ['spacs'],
     queryFn: getSpacList,
-    refetchInterval: 60000 * 5
+    refetchInterval: 60000 * 5,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000)
   });
 
   // Function to format large numbers
-  const formatNumber = (num: number) => {
+  const formatNumber = (num: number | undefined) => {
+    if (!num) return '0';
     if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
     if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
     if (num >= 1e3) return `${(num / 1e3).toFixed(2)}K`;
@@ -89,65 +85,27 @@ export function MarketTabs() {
       </div>
 
       <div className="space-y-4">
-        {activeTab === 'crypto' && (
-          <div className="grid gap-4">
-            {CRYPTO_SYMBOLS.map((symbol, index) => {
-              const { data: quote, isLoading, error } = cryptoResults[index];
-              return (
-                <div key={symbol} className="p-4 border border-border/40 rounded-lg">
-                  {isLoading ? (
-                    <div className="animate-pulse">
-                      <div className="h-6 w-24 bg-muted rounded mb-2"></div>
-                      <div className="h-4 w-32 bg-muted/50 rounded"></div>
-                    </div>
-                  ) : error ? (
-                    <div className="text-destructive">
-                      <p className="font-medium">{symbol}</p>
-                      <p className="text-sm">Error loading data - retrying...</p>
-                    </div>
-                  ) : quote ? (
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="text-lg font-semibold">{symbol}/USDT</h3>
-                        <p className="text-sm text-muted-foreground">
-                          24h Range: ${quote.l.toLocaleString()} - ${quote.h.toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-bold">${quote.c.toLocaleString()}</p>
-                        <p className={quote.c > quote.o ? 'text-green-500' : 'text-red-500'}>
-                          {((quote.c - quote.o) / quote.o * 100).toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-destructive">
-                      <p className="font-medium">{symbol}</p>
-                      <p className="text-sm">No data available</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
         {activeTab === 'ipo' && (
           <div className="space-y-4">
-            {iposLoading ? (
+            {ipoError ? (
+              <div className="text-center text-destructive">
+                <p>Error loading IPO calendar</p>
+                <p className="text-sm">Please try again later</p>
+              </div>
+            ) : iposLoading ? (
               <div className="text-center text-muted-foreground">Loading IPO calendar...</div>
-            ) : ipoEvents.length === 0 ? (
+            ) : !Array.isArray(ipoEvents) || ipoEvents.length === 0 ? (
               <div className="text-center text-muted-foreground">No upcoming IPOs found</div>
             ) : (
-              ipoEvents.map(ipo => (
-                <div key={ipo.symbol} className="p-4 border border-border/40 rounded-lg">
+              ipoEvents.map((ipo, index) => (
+                <div key={`${ipo.symbol}-${index}`} className="p-4 border border-border/40 rounded-lg">
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-semibold">{ipo.name} ({ipo.symbol})</h3>
                       <p className="text-sm text-muted-foreground">
                         {new Date(ipo.date).toLocaleDateString()}
                       </p>
-                      {ipo.shares && (
+                      {typeof ipo.shares === 'number' && (
                         <p className="text-sm text-muted-foreground">
                           Shares: {formatNumber(ipo.shares)}
                         </p>
@@ -157,7 +115,7 @@ export function MarketTabs() {
                       <span className="px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
                         {ipo.exchange}
                       </span>
-                      {ipo.price && (
+                      {typeof ipo.price === 'number' && (
                         <p className="mt-1 font-medium">
                           ${ipo.price.toFixed(2)}
                         </p>
@@ -172,13 +130,18 @@ export function MarketTabs() {
 
         {activeTab === 'spac' && (
           <div className="space-y-4">
-            {spacsLoading ? (
+            {spacError ? (
+              <div className="text-center text-destructive">
+                <p>Error loading SPACs</p>
+                <p className="text-sm">Please try again later</p>
+              </div>
+            ) : spacsLoading ? (
               <div className="text-center text-muted-foreground">Loading SPACs...</div>
-            ) : spacs.length === 0 ? (
+            ) : !Array.isArray(spacs) || spacs.length === 0 ? (
               <div className="text-center text-muted-foreground">No active SPACs found</div>
             ) : (
-              spacs.map(spac => (
-                <div key={spac.symbol} className="p-4 border border-border/40 rounded-lg">
+              spacs.map((spac, index) => (
+                <div key={`${spac.symbol}-${index}`} className="p-4 border border-border/40 rounded-lg">
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-semibold">{spac.name} ({spac.symbol})</h3>
@@ -196,6 +159,14 @@ export function MarketTabs() {
                 </div>
               ))
             )}
+          </div>
+        )}
+
+        {/* Hide crypto section for now as requested */}
+        {activeTab === 'crypto' && (
+          <div className="text-center text-muted-foreground">
+            <p>Crypto data temporarily unavailable</p>
+            <p className="text-sm">Please check back later</p>
           </div>
         )}
       </div>
