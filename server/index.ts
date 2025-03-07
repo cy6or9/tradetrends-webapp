@@ -1,10 +1,15 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, log } from "./vite";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Health check endpoint
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 // Add detailed logging middleware
 app.use((req, res, next) => {
@@ -30,7 +35,7 @@ app.use((req, res, next) => {
     }
 
     // Log API responses
-    if (path.startsWith("/api")) {
+    if (path.startsWith("/api") || path === "/health") {
       let apiLog = logLine;
       if (capturedJsonResponse) {
         apiLog += ` :: ${JSON.stringify(capturedJsonResponse)}`;
@@ -63,8 +68,6 @@ app.use((req, res, next) => {
   // Set up Vite in development mode
   if (app.get("env") === "development") {
     await setupVite(app, server);
-  } else {
-    serveStatic(app);
   }
 
   // Listen on port 5000
@@ -75,5 +78,13 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`Server running at http://0.0.0.0:${port}`);
+  });
+
+  // Log any unhandled errors
+  server.on('error', (error: any) => {
+    log(`Server error: ${error.message}`, 'error');
+    if (error.code === 'EADDRINUSE') {
+      log(`Port ${port} is already in use`, 'error');
+    }
   });
 })();
