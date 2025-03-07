@@ -16,6 +16,7 @@ const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
 const RATE_LIMIT_DELAY = 2000; // 2 seconds between requests
 const BATCH_SIZE = 2; // Process only 2 stocks at once
 const MAX_RETRIES = 5;
+const MAX_CACHE_AGE = 5 * 60 * 1000; // 5 minutes
 
 // Get Finnhub secret from environment
 const FINNHUB_SECRET = process.env.EXPECTED_WEBHOOK_SECRET;
@@ -23,8 +24,8 @@ if (!FINNHUB_SECRET) {
   throw new Error('EXPECTED_WEBHOOK_SECRET environment variable is not set');
 }
 
-// In-memory caches
-const stockCache = new Map<string, any>();
+// In-memory caches with timestamps
+const stockCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 60000; // 1 minute cache TTL
 
 // Store connected clients
@@ -38,6 +39,8 @@ function log(message: string, source = 'server') {
 async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<any> {
   const cacheKey = `finnhub_${endpoint}`;
   const cached = stockCache.get(cacheKey);
+
+  // Return cached data if it's still fresh
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     log(`Using cached data for ${endpoint}`, 'cache');
     return cached.data;
@@ -50,19 +53,11 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
       const fullUrl = url.includes('?') ? `${url}&token=${FINNHUB_API_KEY}` : `${url}?token=${FINNHUB_API_KEY}`;
 
       log(`Request to Finnhub: ${endpoint} (attempt ${i + 1}/${retries})`, 'api');
-      const response = await fetch(fullUrl, {
-        headers: {
-          'X-Finnhub-Secret': FINNHUB_SECRET
-        }
-      });
+      const response = await fetch(fullUrl);
 
       log(`Response status: ${response.status} for ${endpoint}`, 'api');
 
-      // Acknowledge receipt immediately
-      if (response.ok) {
-        log('Request acknowledged', 'api');
-      }
-
+      // Handle rate limiting with exponential backoff
       if (response.status === 429) {
         const delay = RATE_LIMIT_DELAY * Math.pow(2, i);
         log(`Rate limited, waiting ${delay}ms`, 'api');
@@ -90,8 +85,8 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
     }
   }
 
-  // If all retries failed, try to return cached data even if expired
-  if (cached) {
+  // Return stale cache data if available rather than failing
+  if (cached && Date.now() - cached.timestamp < MAX_CACHE_AGE) {
     log(`Using stale cache for ${endpoint}`, 'cache');
     return cached.data;
   }
