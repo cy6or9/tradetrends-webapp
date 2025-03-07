@@ -4,7 +4,7 @@ import fetch from 'node-fetch';
 const handler: Handler = async (event) => {
   // Get the Finnhub API key from environment variables
   const finnhubApiKey = process.env.FINNHUB_API_KEY;
-  
+
   if (!finnhubApiKey) {
     return {
       statusCode: 500,
@@ -16,7 +16,7 @@ const handler: Handler = async (event) => {
     // Extract the endpoint from the path
     const path = event.path.replace('/.netlify/functions/api', '');
     const finnhubUrl = `https://finnhub.io/api/v1${path}`;
-    
+
     // Add API key to URL
     const url = new URL(finnhubUrl);
     url.searchParams.append('token', finnhubApiKey);
@@ -27,12 +27,22 @@ const handler: Handler = async (event) => {
 
     return {
       statusCode: response.status,
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      }
     };
   } catch (error) {
+    console.error('Error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to fetch data from Finnhub' })
+      body: JSON.stringify({ error: 'Failed to fetch data from Finnhub' }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
     };
   }
 };

@@ -13,10 +13,15 @@ import { ZodError } from "zod";
 // Finnhub API configuration
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const FINNHUB_SECRET = 'cuvuc2hr01qub8tvmkt0';
 const RATE_LIMIT_DELAY = 2000; // 2 seconds between requests
 const BATCH_SIZE = 2; // Process only 2 stocks at once
 const MAX_RETRIES = 5;
+
+// Get Finnhub secret from environment
+const FINNHUB_SECRET = process.env.EXPECTED_WEBHOOK_SECRET;
+if (!FINNHUB_SECRET) {
+  throw new Error('EXPECTED_WEBHOOK_SECRET environment variable is not set');
+}
 
 // In-memory caches
 const stockCache = new Map<string, any>();
