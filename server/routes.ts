@@ -20,7 +20,6 @@ const MAX_RETRIES = 5;
 
 // In-memory caches
 const stockCache = new Map<string, any>();
-const cryptoCache = new Map<string, any>();
 const CACHE_TTL = 60000; // 1 minute cache TTL
 
 // Store connected clients
@@ -33,9 +32,7 @@ function log(message: string, source = 'server') {
 
 async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<any> {
   const cacheKey = `finnhub_${endpoint}`;
-
-  // Check cache first
-  const cached = cryptoCache.get(cacheKey) || stockCache.get(cacheKey);
+  const cached = stockCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     log(`Using cached data for ${endpoint}`, 'cache');
     return cached.data;
@@ -48,8 +45,6 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
       const fullUrl = url.includes('?') ? `${url}&token=${FINNHUB_API_KEY}` : `${url}?token=${FINNHUB_API_KEY}`;
 
       log(`Request to Finnhub: ${endpoint} (attempt ${i + 1}/${retries})`, 'api');
-
-      // Add Finnhub secret header for authentication
       const response = await fetch(fullUrl, {
         headers: {
           'X-Finnhub-Secret': FINNHUB_SECRET
@@ -75,9 +70,8 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
       }
 
       const data = await response.json();
-      const cache = endpoint.includes('crypto') ? cryptoCache : stockCache;
-      cache.set(cacheKey, { data, timestamp: Date.now() });
-
+      stockCache.set(cacheKey, { data, timestamp: Date.now() });
+      log(`Cached response for ${endpoint}`, 'cache');
       return data;
 
     } catch (error) {
@@ -93,7 +87,7 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
 
   // If all retries failed, try to return cached data even if expired
   if (cached) {
-    log(`Using stale cache for ${endpoint} after all retries failed`, 'cache');
+    log(`Using stale cache for ${endpoint}`, 'cache');
     return cached.data;
   }
 
@@ -277,50 +271,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: 'Symbol parameter is required' });
     }
     proxyFinnhubRequest(`/stock/profile2?symbol=${symbol}`, res);
-  });
-
-  app.get("/api/finnhub/crypto/candle", async (req: any, res: any) => {
-    const { symbol, resolution } = req.query;
-    if (!symbol || !resolution) {
-      return res.status(400).json({ error: 'Missing required parameters' });
-    }
-
-    try {
-      const to = Math.floor(Date.now() / 1000);
-      const from = to - 86400; // 24 hours ago
-
-      log(`Fetching crypto candles for ${symbol}`, 'api');
-
-      // Quick acknowledgment
-      res.status(200);
-
-      const data = await finnhubRequest(`/crypto/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}`);
-
-      if (!data || data.s === 'no_data' || !Array.isArray(data.c)) {
-        log(`No valid data available for ${symbol}`, 'api');
-        return res.json({ s: 'no_data' });
-      }
-
-      // Cache the successful response
-      cryptoCache.set(`crypto_${symbol}`, {
-        data,
-        timestamp: Date.now()
-      });
-
-      log(`Successfully fetched crypto data for ${symbol}`, 'api');
-      res.json(data);
-    } catch (error) {
-      log(`Crypto data error: ${error}`, 'error');
-
-      // Try to return cached data if available
-      const cached = cryptoCache.get(`crypto_${symbol}`);
-      if (cached) {
-        log(`Returning cached data for ${symbol} after error`, 'cache');
-        return res.json(cached.data);
-      }
-
-      res.status(500).json({ error: 'Failed to fetch crypto data' });
-    }
   });
 
   async function proxyFinnhubRequest(endpoint: string, res: any) {

@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
-  getCryptoQuote, 
   getIpoCalendar, 
   getSpacList,
   type IpoEvent,
-  type CryptoQuote,
-  type Spac 
+  type Spac,
+  type Stock 
 } from '@/lib/finnhub';
-
-// Crypto symbols to track
-const CRYPTO_SYMBOLS = ['BTC', 'ETH', 'SOL'];
 
 interface TabButtonProps {
   active: boolean;
@@ -32,16 +28,20 @@ const TabButton: React.FC<TabButtonProps> = ({ active, onClick, children }) => (
 );
 
 export function MarketTabs() {
-  const [activeTab, setActiveTab] = useState<'crypto' | 'ipo' | 'spac'>('crypto');
+  const [activeTab, setActiveTab] = useState<'hot' | 'ipo' | 'spac'>('hot');
 
-  // Fetch quotes for each crypto symbol
-  const cryptoQueries = CRYPTO_SYMBOLS.map(symbol => ({
-    queryKey: ['crypto', symbol],
-    queryFn: () => getCryptoQuote(symbol),
+  // Fetch stock data for hot stocks section
+  const { data: hotStocks = [], isLoading: stocksLoading } = useQuery<Stock[]>({
+    queryKey: ['stocks'],
+    queryFn: async () => {
+      const response = await fetch('/api/stocks/search');
+      if (!response.ok) throw new Error('Failed to fetch stocks');
+      const data = await response.json();
+      return data.sort((a: Stock, b: Stock) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+        .slice(0, 5); // Show top 5 movers
+    },
     refetchInterval: 30000 // Refresh every 30 seconds
-  }));
-
-  const cryptoResults = cryptoQueries.map(query => useQuery(query));
+  });
 
   // Fetch IPO calendar data
   const { data: ipoEvents = [], isLoading: iposLoading, error: ipoError } = useQuery<IpoEvent[]>({
@@ -74,10 +74,10 @@ export function MarketTabs() {
     <div className="space-y-4">
       <div className="flex gap-2 p-1 rounded-lg bg-muted/50">
         <TabButton 
-          active={activeTab === 'crypto'} 
-          onClick={() => setActiveTab('crypto')}
+          active={activeTab === 'hot'} 
+          onClick={() => setActiveTab('hot')}
         >
-          Crypto
+          Hot Stocks
         </TabButton>
         <TabButton 
           active={activeTab === 'ipo'} 
@@ -94,46 +94,34 @@ export function MarketTabs() {
       </div>
 
       <div className="space-y-4">
-        {activeTab === 'crypto' && (
+        {activeTab === 'hot' && (
           <div className="grid gap-4">
-            {CRYPTO_SYMBOLS.map((symbol, index) => {
-              const { data: quote, isLoading, error } = cryptoResults[index];
-              return (
-                <div key={symbol} className="p-4 border border-border/40 rounded-lg">
-                  {isLoading ? (
-                    <div className="animate-pulse">
-                      <div className="h-6 w-24 bg-muted rounded mb-2"></div>
-                      <div className="h-4 w-32 bg-muted/50 rounded"></div>
-                    </div>
-                  ) : error ? (
-                    <div className="text-destructive">
-                      <p className="font-medium">{symbol}</p>
-                      <p className="text-sm">Error loading data</p>
-                    </div>
-                  ) : quote ? (
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="text-lg font-semibold">{symbol}/USDT</h3>
-                        <p className="text-sm text-muted-foreground">
-                          24h Range: ${quote.l.toLocaleString()} - ${quote.h.toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-bold">${quote.c.toLocaleString()}</p>
-                        <p className={`text-sm ${quote.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {quote.changePercent >= 0 ? '↑' : '↓'} {Math.abs(quote.changePercent).toFixed(2)}%
-                        </p>
+            {stocksLoading ? (
+              <div className="text-center text-muted-foreground">Loading hot stocks...</div>
+            ) : hotStocks.length === 0 ? (
+              <div className="text-center text-muted-foreground">No stock data available</div>
+            ) : (
+              hotStocks.map((stock) => (
+                <div key={stock.symbol} className="p-4 border border-border/40 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-semibold">{stock.symbol}</h3>
+                      <p className="text-sm text-muted-foreground">{stock.name}</p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                        <span>Vol: {formatNumber(stock.volume)}</span>
+                        <span>Cap: ${formatNumber(stock.marketCap)}</span>
                       </div>
                     </div>
-                  ) : (
-                    <div className="text-destructive">
-                      <p className="font-medium">{symbol}</p>
-                      <p className="text-sm">No data available</p>
+                    <div className="text-right">
+                      <p className="text-xl font-bold">${stock.price.toFixed(2)}</p>
+                      <p className={`text-sm ${stock.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {stock.changePercent >= 0 ? '↑' : '↓'} {Math.abs(stock.changePercent).toFixed(2)}%
+                      </p>
                     </div>
-                  )}
+                  </div>
                 </div>
-              );
-            })}
+              ))
+            )}
           </div>
         )}
 
