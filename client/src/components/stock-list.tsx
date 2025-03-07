@@ -11,7 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Star, TrendingUp, TrendingDown } from "lucide-react";
+import { Star, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Stock } from "@shared/schema";
 import { getAllUsStocks } from "@/lib/finnhub";
 
@@ -22,7 +23,14 @@ interface StockListProps {
     minChangePercent?: number;
     maxChangePercent?: number;
     minAnalystRating?: number;
+    minVolume?: number;
+    maxVolume?: number;
+    minMarketCap?: number;
+    maxMarketCap?: number;
+    minBeta?: number;
+    maxBeta?: number;
     sectors?: string[];
+    industries?: string[];
     sortBy?: string;
     sortDir?: "asc" | "desc";
   };
@@ -35,16 +43,27 @@ export function StockList({ filters, setStocks }: StockListProps) {
     queryFn: getAllUsStocks,
   });
 
+  const [sort, setSort] = useState<{sortBy: string, sortDir: "asc" | "desc"} | null>(null);
+
+  const handleSort = (sortBy: string) => {
+    if (sort && sort.sortBy === sortBy) {
+      setSort({sortBy, sortDir: sort.sortDir === "asc" ? "desc" : "asc"});
+    } else {
+      setSort({sortBy, sortDir: "asc"});
+    }
+  }
+
   // Update parent component with stock count when data changes
   useEffect(() => {
     if (stocks?.length) {
-      setStocks?.(stocks); //Added ? to handle optional setStocks
+      setStocks?.(stocks);
     }
   }, [stocks, setStocks]);
 
   if (isLoading) {
     return (
       <div className="p-8 text-center text-muted-foreground">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
         Loading stocks...
       </div>
     );
@@ -64,23 +83,30 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
     if (filters.maxChangePercent && stock.changePercent > filters.maxChangePercent) return false;
     if (filters.minAnalystRating && stock.analystRating < filters.minAnalystRating) return false;
+    if (filters.minVolume && stock.volume < filters.minVolume * 1_000_000) return false;
+    if (filters.maxVolume && stock.volume > filters.maxVolume * 1_000_000) return false;
+    if (filters.minMarketCap && stock.marketCap < filters.minMarketCap * 1_000_000_000) return false;
+    if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
+    if (filters.minBeta && stock.beta < filters.minBeta) return false;
+    if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
     if (filters.sectors?.length && !filters.sectors.includes(stock.sector)) return false;
+    if (filters.industries?.length && !filters.industries.includes(stock.industry)) return false;
     return true;
   });
 
   // Type-safe sorting
-  if (filters.sortBy && filters.sortDir) {
+  if (sort && sort.sortBy) {
     filteredStocks.sort((a, b) => {
-      const aVal = a[filters.sortBy as keyof Stock];
-      const bVal = b[filters.sortBy as keyof Stock];
+      const aVal = a[sort.sortBy as keyof Stock];
+      const bVal = b[sort.sortBy as keyof Stock];
 
       if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return filters.sortDir === "asc" ? aVal - bVal : bVal - aVal;
+        return sort.sortDir === "asc" ? aVal - bVal : bVal - aVal;
       }
 
       // Handle string comparison
       if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return filters.sortDir === "asc"
+        return sort.sortDir === "asc"
           ? aVal.localeCompare(bVal)
           : bVal.localeCompare(aVal);
       }
@@ -95,13 +121,41 @@ export function StockList({ filters, setStocks }: StockListProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Symbol</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Change %</TableHead>
-              <TableHead>Analyst Rating</TableHead>
-              <TableHead>Volume</TableHead>
-              <TableHead>Sector</TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
+                  Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
+                  Name <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium">
+                  Price <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium">
+                  Change % <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium">
+                  Analyst Rating <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium">
+                  Volume <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('sector')} className="h-8 text-left font-medium">
+                  Sector <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -131,7 +185,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                     {stock.analystRating}%
                   </Badge>
                 </TableCell>
-                <TableCell>{(stock.volume / 1000000).toFixed(1)}M</TableCell>
+                <TableCell>{(stock.volume / 1_000_000).toFixed(1)}M</TableCell>
                 <TableCell>{stock.sector}</TableCell>
               </TableRow>
             ))}

@@ -24,7 +24,14 @@ const filterSchema = z.object({
   minChangePercent: z.string().optional(),
   maxChangePercent: z.string().optional(),
   minAnalystRating: z.string().optional(),
+  minVolume: z.string().optional(),
+  maxVolume: z.string().optional(),
+  minMarketCap: z.string().optional(),
+  maxMarketCap: z.string().optional(),
+  minBeta: z.string().optional(),
+  maxBeta: z.string().optional(),
   sectors: z.array(z.string()).optional(),
+  industries: z.array(z.string()).optional(),
   sortBy: z.string().optional(),
   sortDir: z.enum(["asc", "desc"]).optional(),
 });
@@ -45,6 +52,19 @@ const SECTORS = [
   "Industrials",
   "Utilities",
   "Real Estate",
+];
+
+const INDUSTRIES = [
+  "Software",
+  "Hardware",
+  "Semiconductors",
+  "Biotechnology",
+  "Banking",
+  "Insurance",
+  "Retail",
+  "Oil & Gas",
+  "Mining",
+  "Manufacturing",
 ];
 
 export function StockFilters({ onFilterChange }: StockFiltersProps) {
@@ -130,6 +150,84 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
 
           <FormField
             control={form.control}
+            name="minVolume"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Volume (M)</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="0" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="maxVolume"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Volume (M)</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="1000" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="minMarketCap"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Market Cap (B)</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="0" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="maxMarketCap"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Market Cap (B)</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="1000" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="minBeta"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Beta</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="0" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="maxBeta"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Beta</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="3" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="sectors"
             render={({ field }) => (
               <FormItem>
@@ -157,6 +255,33 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
 
           <FormField
             control={form.control}
+            name="industries"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Industry</FormLabel>
+                <Select
+                  onValueChange={(value) => field.onChange([value])}
+                  value={field.value?.[0]}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select industry" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {INDUSTRIES.map((industry) => (
+                      <SelectItem key={industry} value={industry}>
+                        {industry}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="sortBy"
             render={({ field }) => (
               <FormItem>
@@ -172,6 +297,8 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                     <SelectItem value="changePercent">Change %</SelectItem>
                     <SelectItem value="analystRating">Analyst Rating</SelectItem>
                     <SelectItem value="volume">Volume</SelectItem>
+                    <SelectItem value="marketCap">Market Cap</SelectItem>
+                    <SelectItem value="beta">Beta</SelectItem>
                   </SelectContent>
                 </Select>
               </FormItem>
