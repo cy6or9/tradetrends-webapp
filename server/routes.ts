@@ -14,7 +14,6 @@ import { ZodError } from "zod";
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
 const RATE_LIMIT_DELAY = 2000; // 2 seconds between requests
-const BATCH_SIZE = 2; // Process only 2 stocks at once
 const MAX_RETRIES = 5;
 const MAX_CACHE_AGE = 5 * 60 * 1000; // 5 minutes
 
@@ -108,7 +107,6 @@ async function searchAndFilterStocks(req: any, res: any) {
 
     // Filter active stocks
     const activeStocks = symbols
-      .slice(0, 200) // Increased from 50 to 200 stocks
       .filter(stock => stock.type === 'Common Stock')
       .filter(stock => !req.query.exchange || stock.exchange === req.query.exchange)
       .filter(stock => !req.query.query ||
@@ -119,6 +117,9 @@ async function searchAndFilterStocks(req: any, res: any) {
     log(`Filtered to ${activeStocks.length} active stocks`, 'search');
 
     const stocks = [];
+    // Increase batch size but stay within API rate limits
+    const BATCH_SIZE = 5; // Process 5 stocks at once to speed up loading
+
     for (let i = 0; i < activeStocks.length; i += BATCH_SIZE) {
       const batch = activeStocks.slice(i, i + BATCH_SIZE);
       log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(activeStocks.length/BATCH_SIZE)}`, 'search');
@@ -147,6 +148,8 @@ async function searchAndFilterStocks(req: any, res: any) {
             beta: profile.beta || 0,
             exchange: stock.exchange,
             industry: profile.industry || 'Unknown',
+            sector: profile.sector || 'Unknown',
+            analystRating: Math.floor(Math.random() * 30) + 70, // Placeholder for demo
             lastUpdate: new Date().toISOString()
           };
 
@@ -166,7 +169,7 @@ async function searchAndFilterStocks(req: any, res: any) {
       const batchResults = await Promise.all(batchPromises);
       stocks.push(...batchResults.filter(Boolean));
 
-      // Add delay between batches
+      // Add delay between batches to respect rate limits
       if (i + BATCH_SIZE < activeStocks.length) {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
