@@ -44,6 +44,76 @@ function broadcastStockUpdate(update: any) {
   }
 }
 
+// Stock search and filter endpoint
+async function searchAndFilterStocks(req: express.Request, res: express.Response) {
+  const { query, exchange, sector, minPrice, maxPrice, sort } = req.query;
+
+  try {
+    log('Search request params:', JSON.stringify({ query, exchange, sector, minPrice, maxPrice, sort }), 'search');
+
+    // Get base stock list from Finnhub
+    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch stocks: ${response.status}`);
+    }
+
+    let stocks = await response.json();
+    log(`Fetched ${stocks.length} stocks from Finnhub`, 'search');
+
+    // Apply filters
+    stocks = stocks.filter((stock: any) => {
+      if (exchange && stock.exchange !== exchange) return false;
+      if (query && !stock.symbol.includes(query.toString().toUpperCase()) && 
+          !stock.description.toLowerCase().includes(query.toString().toLowerCase())) return false;
+      return true;
+    });
+
+    log(`Filtered to ${stocks.length} stocks`, 'search');
+
+    // Get quotes for filtered stocks
+    const quotedStocks = await Promise.all(
+      stocks.slice(0, 100).map(async (stock: any) => {
+        try {
+          const quoteRes = await fetch(`${FINNHUB_API_URL}/quote?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`);
+          const quote = await quoteRes.json();
+          if (!quoteRes.ok) {
+            log(`Failed to fetch quote for ${stock.symbol}: ${quoteRes.status}`, 'error');
+            return null;
+          }
+          return {
+            ...stock,
+            price: quote.c || 0,
+            change: quote.d || 0,
+            changePercent: quote.dp || 0,
+          };
+        } catch (error) {
+          log(`Error fetching quote for ${stock.symbol}: ${error}`, 'error');
+          return null;
+        }
+      })
+    );
+
+    // Remove null entries and sort
+    const validStocks = quotedStocks.filter(s => s !== null);
+    log(`Successfully processed ${validStocks.length} stocks with quotes`, 'search');
+
+    // Apply sorting
+    if (sort) {
+      const [field, order] = sort.toString().split(':');
+      validStocks.sort((a: any, b: any) => {
+        const aVal = a[field];
+        const bVal = b[field];
+        return order === 'desc' ? bVal - aVal : aVal - bVal;
+      });
+    }
+
+    res.json(validStocks);
+  } catch (error) {
+    log(`Search error: ${error}`, 'error');
+    res.status(500).json({ error: 'Failed to search stocks' });
+  }
+}
+
 // Proxy middleware for Finnhub API requests
 async function proxyFinnhubRequest(endpoint: string, req: express.Request, res: express.Response) {
   if (!FINNHUB_API_KEY) {
@@ -134,7 +204,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }, 30000);
 
-  // Finnhub Webhook endpoint
+  // Search and filter endpoint
+  app.get("/api/stocks/search", searchAndFilterStocks);
+
+  // Finnhub API proxy routes
+  app.get("/api/finnhub/quote", (req, res) => {
+    const symbol = req.query.symbol as string;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol parameter is required' });
+    }
+    proxyFinnhubRequest(`/quote?symbol=${symbol}`, req, res);
+  });
+
+  app.get("/api/finnhub/stock/symbol", (req, res) => {
+    proxyFinnhubRequest('/stock/symbol?exchange=US', req, res);
+  });
+
+  app.get("/api/finnhub/crypto/candle", (req, res) => {
+    const { symbol, resolution, from, to } = req.query;
+    if (!symbol || !resolution || !from || !to) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+    proxyFinnhubRequest(`/crypto/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}`, req, res);
+  });
+
+  app.get("/api/finnhub/stock/recommendation", (req, res) => {
+    const symbol = req.query.symbol as string;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol parameter is required' });
+    }
+    proxyFinnhubRequest(`/stock/recommendation?symbol=${symbol}`, req, res);
+  });
+
+  // Webhook endpoint for real-time updates
   app.post("/webhook", express.json(), (req, res) => {
     const signature = req.headers['x-finnhub-webhook-signature'];
     const expectedSecret = process.env.EXPECTED_WEBHOOK_SECRET;
@@ -164,48 +266,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       log(`Error processing webhook: ${error}`, 'error');
       res.status(500).json({ message: 'Internal server error' });
     }
-  });
-
-  // Test endpoint to verify API key
-  app.get("/api/finnhub/test", async (req, res) => {
-    try {
-      const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
-      const data = await response.json();
-      log('API test response:', 'test');
-      res.json({ status: response.status, data: data.slice(0, 2) });
-    } catch (error) {
-      log(`API test error: ${error}`, 'error');
-      res.status(500).json({ error: 'API test failed' });
-    }
-  });
-
-  // Finnhub API proxy routes
-  app.get("/api/finnhub/quote", (req, res) => {
-    const symbol = req.query.symbol as string;
-    if (!symbol) {
-      return res.status(400).json({ error: 'Symbol parameter is required' });
-    }
-    proxyFinnhubRequest(`/quote?symbol=${symbol}`, req, res);
-  });
-
-  app.get("/api/finnhub/stock/symbol", (req, res) => {
-    proxyFinnhubRequest('/stock/symbol?exchange=US', req, res);
-  });
-
-  app.get("/api/finnhub/crypto/candle", (req, res) => {
-    const { symbol, resolution, from, to } = req.query;
-    if (!symbol || !resolution || !from || !to) {
-      return res.status(400).json({ error: 'Missing required parameters' });
-    }
-    proxyFinnhubRequest(`/crypto/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}`, req, res);
-  });
-
-  app.get("/api/finnhub/stock/recommendation", (req, res) => {
-    const symbol = req.query.symbol as string;
-    if (!symbol) {
-      return res.status(400).json({ error: 'Symbol parameter is required' });
-    }
-    proxyFinnhubRequest(`/stock/recommendation?symbol=${symbol}`, req, res);
   });
 
   // Storage routes...
