@@ -8,6 +8,9 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import type { Stock } from "./lib/finnhub";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ReloadIcon } from "@radix-ui/react-icons";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { SlidersHorizontal } from "lucide-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,7 +66,7 @@ function StockApp() {
         let aVal = a[field as keyof Stock];
         let bVal = b[field as keyof Stock];
 
-        // Handle string comparisons (symbol, name, industry)
+        // Handle string comparisons
         if (typeof aVal === 'string' && typeof bVal === 'string') {
           aVal = aVal.toLowerCase();
           bVal = bVal.toLowerCase();
@@ -72,7 +75,7 @@ function StockApp() {
             aVal.localeCompare(bVal);
         }
 
-        // Handle numeric comparisons with null/undefined values
+        // Handle numeric comparisons
         aVal = Number(aVal) || 0;
         bVal = Number(bVal) || 0;
 
@@ -145,12 +148,36 @@ function StockApp() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-6">
-          <h1 className="text-4xl font-bold text-foreground">
-            Stock Market <span className="text-primary">Analysis</span>
-          </h1>
-          <p className="text-lg text-muted-foreground mt-2">
-            Track US stocks with real-time updates and advanced filtering
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-foreground">
+                Stock Market <span className="text-primary">Analysis</span>
+              </h1>
+              <p className="text-lg text-muted-foreground mt-2">
+                Track US stocks with real-time updates and advanced filtering
+              </p>
+            </div>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <SlidersHorizontal className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[300px]">
+                <SheetHeader>
+                  <SheetTitle>Filter & Sort</SheetTitle>
+                  <SheetDescription>
+                    Apply filters and sorting to the stock list
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="mt-4">
+                  <ErrorBoundary>
+                    <StockFilters onFilterChange={setFilters} />
+                  </ErrorBoundary>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
           <div className="mt-2 flex items-center gap-4">
             <span className={`inline-flex items-center text-sm ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
               ● {isConnected ? 'Live Updates' : 'Connecting...'}
@@ -235,14 +262,6 @@ function StockApp() {
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Filters Section */}
-          <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4">Filter & Sort</h2>
-            <ErrorBoundary>
-              <StockFilters onFilterChange={setFilters} />
-            </ErrorBoundary>
           </div>
 
           {/* Market Data Section */}
