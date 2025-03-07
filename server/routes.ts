@@ -44,7 +44,7 @@ function broadcastStockUpdate(update: any) {
   }
 }
 
-// Stock search and filter endpoint
+// Update the searchAndFilterStocks function to be more resilient
 async function searchAndFilterStocks(req: express.Request, res: express.Response) {
   const { query, exchange, sort, minPrice, maxPrice, minMarketCap, maxMarketCap } = req.query;
 
@@ -53,28 +53,52 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
       query, exchange, sort, minPrice, maxPrice, minMarketCap, maxMarketCap 
     }), 'search');
 
-    // Get base stock list from Finnhub
-    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch stocks: ${response.status}`);
+    // Get base stock list from Finnhub with retries
+    let response;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+      try {
+        response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
+        if (response.ok) break;
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
+      } catch (error) {
+        log(`Attempt ${retryCount + 1} failed: ${error}`, 'error');
+        retryCount++;
+        if (retryCount === maxRetries) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+      }
+    }
+
+    if (!response?.ok) {
+      throw new Error(`Failed to fetch stocks after ${maxRetries} attempts`);
     }
 
     let stocks = await response.json();
-
-    // Filter stocks based on exchange and query
-    stocks = stocks.filter((stock: any) => {
-      if (exchange && stock.exchange !== exchange) return false;
-      if (query && !stock.symbol.includes(query.toString().toUpperCase()) && 
-          !stock.description.toLowerCase().includes(query.toString().toLowerCase())) return false;
-      return true;
-    });
+    stocks = stocks.filter((stock: any) => 
+      stock.type === 'Common Stock' && 
+      (!exchange || stock.exchange === exchange) &&
+      (!query || 
+        stock.symbol.toLowerCase().includes(query.toString().toLowerCase()) || 
+        stock.description.toLowerCase().includes(query.toString().toLowerCase()))
+    );
 
     log(`Filtered to ${stocks.length} stocks`, 'search');
 
-    // Get quotes and profiles for filtered stocks in parallel
-    const quotedStocks = await Promise.all(
-      stocks.map(async (stock: any) => {
+    // Get quotes and profiles for filtered stocks with rate limiting
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const RATE_LIMIT = 30; // requests per second
+    const BATCH_SIZE = Math.floor(1000 / RATE_LIMIT); // Batch size based on rate limit
+
+    const quotedStocks = [];
+    for (let i = 0; i < stocks.length; i += BATCH_SIZE) {
+      const batch = stocks.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map(async (stock: any) => {
         try {
+          await delay(RATE_LIMIT_DELAY); // Rate limiting delay
+
           const [quoteRes, profileRes] = await Promise.all([
             fetch(`${FINNHUB_API_URL}/quote?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`),
             fetch(`${FINNHUB_API_URL}/stock/profile2?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`)
@@ -113,7 +137,7 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
           return stockData;
         } catch (error) {
           log(`Error processing ${stock.symbol}: ${error}`, 'error');
-          // Return basic stock info even if we can't get current price data
+          // Return basic stock info even if API calls fail
           return {
             ...stock,
             price: 0,
@@ -125,17 +149,17 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
             industry: 'Unknown'
           };
         }
-      })
-    );
+      });
 
-    // Remove null entries and sort
-    const validStocks = quotedStocks.filter(s => s !== null);
-    log(`Successfully processed ${validStocks.length} stocks with quotes`, 'search');
+      const batchResults = await Promise.all(batchPromises);
+      quotedStocks.push(...batchResults.filter(s => s !== null));
+      log(`Processed ${quotedStocks.length}/${stocks.length} stocks`, 'search');
+    }
 
     // Apply sorting
     if (sort) {
       const [field, order] = sort.toString().split(':');
-      validStocks.sort((a: any, b: any) => {
+      quotedStocks.sort((a: any, b: any) => {
         let aVal = a[field];
         let bVal = b[field];
 
@@ -149,14 +173,14 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
         }
 
         // Handle numeric comparisons with null/undefined values
-        aVal = aVal || 0;
-        bVal = bVal || 0;
+        aVal = Number(aVal) || 0;
+        bVal = Number(bVal) || 0;
         return order === 'desc' ? bVal - aVal : aVal - bVal;
       });
     }
 
-    log(`Sending ${validStocks.length} stocks after sorting`, 'search');
-    res.json(validStocks);
+    log(`Sending ${quotedStocks.length} stocks after sorting`, 'search');
+    res.json(quotedStocks);
   } catch (error) {
     log(`Search error: ${error}`, 'error');
     res.status(500).json({ error: 'Failed to search stocks' });
