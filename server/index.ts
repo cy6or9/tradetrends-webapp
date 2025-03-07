@@ -96,6 +96,18 @@ app.use((req, res, next) => {
       });
     });
 
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      log(`Uncaught exception: ${error.message}`, 'error');
+      console.error('Uncaught exception:', error);
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', (reason, promise) => {
+      log(`Unhandled Rejection at: ${promise}, reason: ${reason}`, 'error');
+      console.error('Unhandled Rejection:', reason);
+    });
+
   } catch (error) {
     log(`Failed to start server: ${error}`, 'error');
     console.error('Server startup error:', error);

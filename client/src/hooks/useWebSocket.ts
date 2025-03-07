@@ -18,25 +18,28 @@ export function useWebSocket() {
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
-  const reconnectTimeoutRef = useRef<number>();
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
 
   const connect = useCallback(() => {
-    if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
-      console.error('Max reconnection attempts reached');
-      return;
-    }
-
-    // Clear any existing connection
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
-      console.log('Connecting to WebSocket:', wsUrl);
+      // Clear any existing connection
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
 
+      // Check max reconnection attempts
+      if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+        console.error('Max reconnection attempts reached');
+        return;
+      }
+
+      // Get the correct WebSocket URL based on current protocol
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}/ws`;
+
+      console.log('Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -45,14 +48,15 @@ export function useWebSocket() {
         setIsConnected(true);
         reconnectAttempts.current = 0;
         if (reconnectTimeoutRef.current) {
-          window.clearTimeout(reconnectTimeoutRef.current);
+          clearTimeout(reconnectTimeoutRef.current);
         }
       };
 
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          if (message.type === 'stockUpdate' && message.data?.symbol && typeof message.data.price === 'number') {
+          if (message.type === 'stockUpdate' && message.data?.symbol && message.data?.price) {
+            console.log('Received stock update:', message);
             setLastMessage(message);
           }
         } catch (error) {
@@ -60,8 +64,8 @@ export function useWebSocket() {
         }
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
+      ws.onclose = (event) => {
+        console.log(`WebSocket disconnected: ${event.code} - ${event.reason}`);
         setIsConnected(false);
         wsRef.current = null;
 
@@ -70,16 +74,20 @@ export function useWebSocket() {
         reconnectAttempts.current++;
 
         console.log(`Attempting to reconnect (${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS}) in ${delay}ms...`);
-        reconnectTimeoutRef.current = window.setTimeout(() => {
+        reconnectTimeoutRef.current = setTimeout(() => {
           connect();
         }, delay);
       };
 
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
+        // Log additional connection details for debugging
+        console.log('Connection details:', {
+          protocol,
+          host,
+          url: wsUrl,
+          readyState: ws.readyState
+        });
       };
 
     } catch (error) {
@@ -92,7 +100,7 @@ export function useWebSocket() {
     connect();
     return () => {
       if (reconnectTimeoutRef.current) {
-        window.clearTimeout(reconnectTimeoutRef.current);
+        clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();
