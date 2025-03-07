@@ -8,24 +8,30 @@ import { ZodError } from "zod";
 // Store connected clients
 const clients = new Set<WebSocket>();
 
+// Test stocks for real-time updates
+const testStocks = ['AAPL', 'MSFT'];
+
 // Mock function to simulate real-time stock updates
 function startStockUpdates(wss: WebSocketServer) {
   setInterval(() => {
-    const mockUpdate = {
-      type: 'stockUpdate',
-      data: {
-        symbol: 'AAPL',
-        price: 175 + Math.random() * 2 - 1, // Random price between 174-176
-        change: (Math.random() * 2 - 1).toFixed(2),
-        timestamp: new Date().toISOString()
-      }
-    };
+    testStocks.forEach(symbol => {
+      const basePrice = symbol === 'AAPL' ? 175 : 285;
+      const mockUpdate = {
+        type: 'stockUpdate',
+        data: {
+          symbol,
+          price: basePrice + Math.random() * 2 - 1, // Random price ±$1
+          change: (Math.random() * 2 - 1).toFixed(2),
+          timestamp: new Date().toISOString()
+        }
+      };
 
-    // Broadcast to all connected clients
-    clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(mockUpdate));
-      }
+      // Broadcast to all connected clients
+      clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(mockUpdate));
+        }
+      });
     });
   }, 2000); // Update every 2 seconds
 }

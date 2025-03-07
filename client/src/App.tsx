@@ -17,9 +17,35 @@ interface Stock {
 
 const queryClient = new QueryClient();
 
+// Initial test data
+const initialStocks: Stock[] = [
+  {
+    id: "1",
+    symbol: "AAPL",
+    name: "Apple Inc.",
+    price: 175.0,
+    change: 0,
+    changePercent: 0,
+    volume: 55000000,
+    marketCap: 2800000000000,
+    analystRating: 92
+  },
+  {
+    id: "2",
+    symbol: "MSFT",
+    name: "Microsoft Corporation",
+    price: 285.0,
+    change: 0,
+    changePercent: 0,
+    volume: 25000000,
+    marketCap: 2100000000000,
+    analystRating: 95
+  }
+];
+
 function StockApp() {
-  const [stocks, setStocks] = useState<Stock[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [stocks, setStocks] = useState<Stock[]>(initialStocks);
+  const [loading, setLoading] = useState(false); // Changed to false since we have initial data
   const { isConnected, lastMessage } = useWebSocket();
 
   // Handle real-time updates
@@ -27,11 +53,19 @@ function StockApp() {
     if (lastMessage?.type === 'stockUpdate') {
       const update = lastMessage.data;
       setStocks(prevStocks => 
-        prevStocks.map(stock => 
-          stock.symbol === update.symbol
-            ? { ...stock, price: update.price, change: update.change, lastUpdate: update.timestamp }
-            : stock
-        )
+        prevStocks.map(stock => {
+          if (stock.symbol === update.symbol) {
+            const changePercent = ((update.price - stock.price) / stock.price) * 100;
+            return {
+              ...stock,
+              price: update.price,
+              change: update.change,
+              changePercent,
+              lastUpdate: update.timestamp
+            };
+          }
+          return stock;
+        })
       );
     }
   }, [lastMessage]);
