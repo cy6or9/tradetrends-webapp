@@ -4,7 +4,7 @@
   functions = "netlify/functions"
 
 [functions]
-  external_node_modules = ["@neondatabase/serverless"]
+  external_node_modules = ["@neondatabase/serverless", "node-fetch"]
   node_bundler = "esbuild"
 
 [[redirects]]
