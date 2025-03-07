@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useNotifications } from "./hooks/useNotifications";
+import { MarketTabs } from "./components/MarketTabs";
 
 interface Stock {
   id: string;
@@ -57,7 +58,7 @@ function StockApp() {
   useEffect(() => {
     if (lastMessage?.type === 'stockUpdate') {
       const update = lastMessage.data;
-      setStocks(prevStocks => 
+      setStocks(prevStocks =>
         prevStocks.map(stock => {
           if (stock.symbol === update.symbol) {
             const changePercent = ((update.price - stock.price) / stock.price) * 100;
@@ -147,49 +148,57 @@ function StockApp() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
-          {loading ? (
-            <div className="text-center text-muted-foreground">
-              <div className="animate-pulse text-primary">Loading stock data...</div>
-            </div>
-          ) : stocks.length === 0 ? (
-            <div className="text-center space-y-4">
-              <p className="text-muted-foreground">
-                No stocks found. Add some stocks to track.
-              </p>
-              <button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors">
-                Add Stocks
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {stocks.map(stock => (
-                <div key={stock.symbol} className="flex items-center justify-between p-4 border border-border/40 rounded-md">
-                  <div>
-                    <h3 className="font-semibold">{stock.symbol}</h3>
-                    <p className="text-sm text-muted-foreground">{stock.name}</p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
-                      <p className={`text-sm ${stock.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {stock.change >= 0 ? '↑' : '↓'} {Math.abs(stock.change)}%
-                      </p>
+        <div className="space-y-8">
+          <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
+            <h2 className="text-2xl font-semibold mb-4">Stocks</h2>
+            {loading ? (
+              <div className="text-center text-muted-foreground">
+                <div className="animate-pulse text-primary">Loading stock data...</div>
+              </div>
+            ) : stocks.length === 0 ? (
+              <div className="text-center space-y-4">
+                <p className="text-muted-foreground">
+                  No stocks found. Add some stocks to track.
+                </p>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors">
+                  Add Stocks
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {stocks.map(stock => (
+                  <div key={stock.symbol} className="flex items-center justify-between p-4 border border-border/40 rounded-md">
+                    <div>
+                      <h3 className="font-semibold">{stock.symbol}</h3>
+                      <p className="text-sm text-muted-foreground">{stock.name}</p>
                     </div>
-                    <button 
-                      className="hover:bg-accent/50 p-2 rounded-full transition-colors"
-                      onClick={() => toggleFavorite(stock.id)}
-                      title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                    >
-                      <span className={`text-xl ${stock.isFavorite ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {stock.isFavorite ? '★' : '☆'}
-                      </span>
-                    </button>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
+                        <p className={`text-sm ${stock.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {stock.change >= 0 ? '↑' : '↓'} {Math.abs(stock.change)}%
+                        </p>
+                      </div>
+                      <button
+                        className="hover:bg-accent/50 p-2 rounded-full transition-colors"
+                        onClick={() => toggleFavorite(stock.id)}
+                        title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                      >
+                        <span className={`text-xl ${stock.isFavorite ? 'text-primary' : 'text-muted-foreground'}`}>
+                          {stock.isFavorite ? '★' : '☆'}
+                        </span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
+            <h2 className="text-2xl font-semibold mb-4">Market Data</h2>
+            <MarketTabs />
+          </div>
         </div>
       </main>
     </div>
