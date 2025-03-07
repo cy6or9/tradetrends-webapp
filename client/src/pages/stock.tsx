@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { StockChart } from "@/components/stock-chart";
-import { StockNews } from "@/components/stock-news";
+import { StockNews as StockNewsComponent } from "@/components/stock-news";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { getStockAnalysis } from "@/lib/mistral";
 import { useToast } from "@/hooks/use-toast";
 import type { Stock } from "@shared/schema";
 import type { StockAnalysis } from "@/lib/mistral";
-import type { StockNews } from "@/lib/finnhub";
+import type { NewsItem } from "@/lib/finnhub";
 
 export default function StockPage() {
   const { symbol } = useParams();
@@ -23,7 +23,7 @@ export default function StockPage() {
   });
 
   // Fetch news for AI analysis
-  const { data: news } = useQuery<StockNews[]>({
+  const { data: news } = useQuery<NewsItem[]>({
     queryKey: [`/api/stocks/${symbol}/news`],
   });
 
@@ -45,7 +45,7 @@ export default function StockPage() {
         stockId: stock!.id,
         notifyOnRating: true
       });
-      
+
       toast({
         title: "Added to Favorites",
         description: `You'll be notified when ${symbol} reaches high analyst ratings.`
@@ -93,7 +93,7 @@ export default function StockPage() {
             </div>
           </div>
         </div>
-        
+
         <div className="flex gap-2">
           <Button onClick={toggleFavorite} variant="outline">
             <Star className="w-4 h-4 mr-2" />
@@ -110,7 +110,7 @@ export default function StockPage() {
         <div className="lg:col-span-2">
           <StockChart symbol={stock.symbol} />
         </div>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Stock Details</CardTitle>
@@ -171,7 +171,7 @@ export default function StockPage() {
         )}
 
         <div className="lg:col-span-3">
-          <StockNews symbol={stock.symbol} />
+          <StockNewsComponent symbol={stock.symbol} />
         </div>
       </div>
     </div>

@@ -25,6 +25,8 @@
   for = "/*"
     [headers.values]
     Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
     Content-Security-Policy = "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.finnhub.io https://*.replit.app; img-src 'self' data: https:; connect-src 'self' wss: https://*.finnhub.io https://*.replit.app;"
     Cache-Control = "no-cache"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"

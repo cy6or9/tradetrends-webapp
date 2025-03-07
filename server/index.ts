@@ -1,6 +1,8 @@
+import path from "path";
+import fs from "fs";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, log } from "./vite";
+import { setupVite, log, serveStatic } from "./vite";
 
 const app = express();
 app.use(express.json());
@@ -62,15 +64,41 @@ app.use((req, res, next) => {
       console.error(err);
     });
 
-    // Set up Vite in development mode
+    // Set up Vite in development mode or serve static files in production
     if (app.get("env") === "development") {
       log('Setting up Vite...', 'server');
       await setupVite(app, server);
       log('Vite setup completed', 'server');
+    } else {
+      const publicDir = path.resolve(__dirname, "public");
+      log(`Serving static files from: ${publicDir}`, 'server');
+
+      // Verify the public directory exists
+      if (!fs.existsSync(publicDir)) {
+        throw new Error(`Public directory not found: ${publicDir}`);
+      }
+
+      // Serve static files
+      app.use(express.static(publicDir));
+
+      // Serve index.html for all routes (client-side routing)
+      app.get('*', (req, res) => {
+        if (!req.path.startsWith('/api')) {
+          const indexPath = path.join(publicDir, 'index.html');
+          if (fs.existsSync(indexPath)) {
+            res.sendFile(indexPath);
+          } else {
+            log(`Index file not found at: ${indexPath}`, 'error');
+            res.status(404).send('Not found');
+          }
+        }
+      });
+
+      log('Static file serving configured', 'server');
     }
 
     // Listen on port 5000
-    const port = 5000;
+    const port = process.env.PORT || 5000;
     server.listen({
       port,
       host: "0.0.0.0",

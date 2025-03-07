@@ -1,27 +1,10 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import HomeView from '../views/HomeView.vue';
-import StockView from '../views/StockView.vue';
-import NotFoundView from '../views/NotFoundView.vue';
+import { Route } from "wouter";
 
-const router = createRouter({
-  history: createWebHistory(),
-  routes: [
-    {
-      path: '/',
-      name: 'home',
-      component: () => import('../views/HomeView.vue')
-    },
-    {
-      path: '/stock/:symbol',
-      name: 'stock',
-      component: () => import('../views/StockView.vue')
-    },
-    {
-      path: '/:pathMatch(.*)*',
-      name: 'not-found',
-      component: () => import('../views/NotFoundView.vue')
-    }
-  ]
-});
+// Export route components for code splitting
+export const routes = {
+  home: () => import("../pages/home"),
+  stock: () => import("../pages/stock"),
+  notFound: () => import("../pages/not-found"),
+};
 
-export default router;
+export default routes;

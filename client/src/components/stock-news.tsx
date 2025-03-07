@@ -7,14 +7,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { StockNews } from "@/lib/finnhub";
+
+export interface NewsItem {
+  id: string;
+  datetime: number;
+  headline: string;
+  source: string;
+  summary: string;
+  url: string;
+}
 
 interface StockNewsProps {
   symbol: string;
 }
 
 export function StockNews({ symbol }: StockNewsProps) {
-  const { data: news, isLoading } = useQuery<StockNews[]>({
+  const { data: news, isLoading } = useQuery<NewsItem[]>({
     queryKey: [`/api/stocks/${symbol}/news`],
   });
 
