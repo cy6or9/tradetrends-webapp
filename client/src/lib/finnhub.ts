@@ -48,33 +48,6 @@ class CacheManager {
 
 const cacheManager = CacheManager.getInstance();
 
-// Utility function for API requests
-async function makeRequest(endpoint: string, retries = 3): Promise<any> {
-  for (let i = 0; i < retries; i++) {
-    try {
-      console.log(`Requesting ${endpoint} (attempt ${i + 1}/${retries})`);
-      const response = await fetch(endpoint);
-
-      if (!response.ok) {
-        console.error(`Request failed: ${response.status} ${response.statusText}`);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log(`Got response for ${endpoint}`);
-      return data;
-    } catch (error) {
-      console.error(`Request failed: ${error}`);
-      if (i < retries - 1) {
-        const delay = RETRY_DELAY * Math.pow(2, i);
-        console.log(`Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  throw new Error(`Failed after ${retries} retries`);
-}
-
 // API Functions
 export async function getAllUsStocks(): Promise<Stock[]> {
   try {
@@ -99,7 +72,6 @@ export async function getAllUsStocks(): Promise<Stock[]> {
       return [];
     }
 
-    // Cache successful responses
     data.forEach((stock: Stock) => {
       if (stock && stock.symbol) {
         cacheManager.set(`stock_${stock.symbol}`, stock);
@@ -110,6 +82,59 @@ export async function getAllUsStocks(): Promise<Stock[]> {
   } catch (error) {
     console.error('Error fetching US stocks:', error);
     return cacheManager.getAll();
+  }
+}
+
+export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null> {
+  try {
+    console.log(`Fetching crypto quote for ${symbol}...`);
+
+    // Check cache first
+    const cacheKey = `crypto_${symbol}`;
+    const cachedData = cacheManager.get(cacheKey);
+    if (cachedData) {
+      console.log(`Using cached crypto data for ${symbol}`);
+      return cachedData;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const oneDayAgo = now - 86400; // 24 hours ago
+
+    const response = await fetch(
+      `/api/finnhub/crypto/candle?symbol=BINANCE:${symbol}USDT&resolution=D&from=${oneDayAgo}&to=${now}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch crypto data: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || data.s === 'no_data' || !Array.isArray(data.c) || data.c.length === 0) {
+      console.warn(`No valid data available for ${symbol}`);
+      return null;
+    }
+
+    const quote: CryptoQuote = {
+      c: data.c[data.c.length - 1], // Current price
+      h: Math.max(...data.h), // High price
+      l: Math.min(...data.l), // Low price
+      o: data.o[0], // Open price
+      pc: data.o[0], // Previous close price
+      t: data.t[data.t.length - 1], // Latest timestamp
+      change: 0,
+      changePercent: 0
+    };
+
+    // Calculate change and percent change
+    quote.change = quote.c - quote.o;
+    quote.changePercent = (quote.change / quote.o) * 100;
+
+    // Cache the successful response
+    cacheManager.set(cacheKey, quote);
+    return quote;
+  } catch (error) {
+    console.error(`Error fetching crypto quote for ${symbol}:`, error);
+    return cacheManager.get(`crypto_${symbol}`);
   }
 }
 
@@ -225,6 +250,17 @@ export interface Stock {
   lastUpdate?: string;
 }
 
+export type CryptoQuote = {
+  c: number; // Current price
+  h: number; // High price
+  l: number; // Low price
+  o: number; // Open price
+  pc: number; // Previous close price
+  t: number; // Timestamp
+  change: number; // Price change
+  changePercent: number; // Percentage change
+};
+
 export type IpoEvent = {
   symbol: string;
   name: string;
@@ -244,7 +280,7 @@ export type Spac = {
   exchange: string;
 };
 
-// Schema definitions
+// Schemas
 const stockQuoteSchema = z.object({
   c: z.number(),
   d: z.number(),
@@ -266,7 +302,6 @@ const cryptoCandleSchema = z.object({
 });
 
 export type StockQuote = z.infer<typeof stockQuoteSchema>;
-
 
 const stockNewsSchema = z.object({});
 
@@ -308,8 +343,6 @@ const companyProfileSchema = z.object({
 
 export type CompanyProfile = z.infer<typeof companyProfileSchema>;
 
-const API_BASE_URL = 'https://finnhub.io/api/v1';
-
 export type StockNews = {
   category: string;
   datetime: number;
@@ -330,3 +363,4 @@ function getFinnhubApiKey(): string {
   }
   return apiKey;
 }
+const API_BASE_URL = 'https://finnhub.io/api/v1';
