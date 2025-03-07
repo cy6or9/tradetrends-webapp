@@ -253,8 +253,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         log('No IPO calendar data', 'api');
         return res.json([]);
       }
-      log(`Got ${data.ipoCalendar.length} IPO events`, 'api');
-      res.json(data.ipoCalendar);
+
+      // Map the IPO calendar data to include all necessary fields
+      const ipoEvents = data.ipoCalendar.map((ipo: any) => ({
+        symbol: ipo.symbol,
+        name: ipo.name,
+        date: ipo.date,
+        price: ipo.price,
+        numberOfShares: ipo.numberOfShares, // Add this field
+        shares: ipo.numberOfShares, // Add both for compatibility
+        totalShares: ipo.numberOfShares,
+        exchange: ipo.exchange,
+        status: ipo.status
+      }));
+
+      log(`Got ${ipoEvents.length} IPO events with share data`, 'api');
+      res.json(ipoEvents);
     } catch (error) {
       log(`IPO calendar error: ${error}`, 'error');
       res.status(500).json({ error: 'Failed to fetch IPO calendar' });
