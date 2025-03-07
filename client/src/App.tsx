@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useWebSocket } from "./hooks/useWebSocket";
 
 interface Stock {
   id: string;
@@ -11,6 +12,7 @@ interface Stock {
   volume: number;
   marketCap: number;
   analystRating: number;
+  lastUpdate?: string;
 }
 
 const queryClient = new QueryClient();
@@ -18,6 +20,21 @@ const queryClient = new QueryClient();
 function StockApp() {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
+  const { isConnected, lastMessage } = useWebSocket();
+
+  // Handle real-time updates
+  useEffect(() => {
+    if (lastMessage?.type === 'stockUpdate') {
+      const update = lastMessage.data;
+      setStocks(prevStocks => 
+        prevStocks.map(stock => 
+          stock.symbol === update.symbol
+            ? { ...stock, price: update.price, change: update.change, lastUpdate: update.timestamp }
+            : stock
+        )
+      );
+    }
+  }, [lastMessage]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -29,6 +46,11 @@ function StockApp() {
           <p className="text-lg text-muted-foreground mt-2">
             Track stocks with high analyst ratings and market momentum
           </p>
+          <div className="mt-2">
+            <span className={`inline-flex items-center text-sm ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
+              ● {isConnected ? 'Live Updates' : 'Connecting...'}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -49,8 +71,20 @@ function StockApp() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Stock list will be implemented here */}
-              <p className="text-muted-foreground">Stock components coming soon...</p>
+              {stocks.map(stock => (
+                <div key={stock.symbol} className="flex items-center justify-between p-4 border border-border/40 rounded-md">
+                  <div>
+                    <h3 className="font-semibold">{stock.symbol}</h3>
+                    <p className="text-sm text-muted-foreground">{stock.name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
+                    <p className={`text-sm ${stock.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {stock.change >= 0 ? '↑' : '↓'} {Math.abs(stock.change)}%
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
