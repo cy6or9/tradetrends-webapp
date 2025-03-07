@@ -13,13 +13,14 @@ import { ZodError } from "zod";
 // Finnhub API configuration
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const RATE_LIMIT_DELAY = 1000; // Increase base delay for rate limiting
-const BATCH_SIZE = 3; // Process fewer stocks at once
-const MAX_RETRIES = 5; // Increase max retries
+const FINNHUB_SECRET = 'cuvuc2hr01qub8tvmkt0';
+const RATE_LIMIT_DELAY = 2000; // 2 seconds between requests
+const BATCH_SIZE = 2; // Process only 2 stocks at once
+const MAX_RETRIES = 5;
 
 // In-memory caches
 const stockCache = new Map<string, any>();
-const CACHE_TTL = 300000; // Increase cache TTL to 5 minutes
+const CACHE_TTL = 300000; // 5 minutes cache TTL
 
 // Store connected clients
 const clients = new Set<WebSocket>();
@@ -43,8 +44,20 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
       const fullUrl = url.includes('?') ? `${url}&token=${FINNHUB_API_KEY}` : `${url}?token=${FINNHUB_API_KEY}`;
 
       log(`Request to Finnhub: ${endpoint} (attempt ${i + 1}/${retries})`, 'api');
-      const response = await fetch(fullUrl);
+
+      // Add Finnhub secret header for authentication
+      const response = await fetch(fullUrl, {
+        headers: {
+          'X-Finnhub-Secret': FINNHUB_SECRET
+        }
+      });
+
       log(`Response status: ${response.status}`, 'api');
+
+      // Quickly acknowledge receipt with 200 status
+      if (response.ok) {
+        log('Request acknowledged', 'api');
+      }
 
       if (response.status === 429) {
         const delay = RATE_LIMIT_DELAY * Math.pow(2, i);
@@ -58,24 +71,19 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
       }
 
       const data = await response.json();
-      log(`Got response: ${JSON.stringify(data).slice(0, 100)}...`, 'api');
-
-      if (!data) {
-        throw new Error('Empty response');
-      }
-
       stockCache.set(cacheKey, { data, timestamp: Date.now() });
       return data;
 
     } catch (error) {
       log(`Request failed: ${error}`, 'error');
 
-      // On last retry, return cached data if available
+      // On last retry, try to use cached data even if expired
       if (i === retries - 1 && cached) {
-        log(`Using stale cache for ${endpoint} after ${retries} failed attempts`, 'cache');
+        log(`Using stale cache for ${endpoint}`, 'cache');
         return cached.data;
       }
 
+      // Wait before retrying with exponential backoff
       const delay = RATE_LIMIT_DELAY * Math.pow(2, i);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -98,6 +106,7 @@ async function searchAndFilterStocks(req: any, res: any) {
 
     // Filter active stocks
     const activeStocks = symbols
+      .slice(0, 50) // Limit initial load to 50 stocks
       .filter(stock => stock.type === 'Common Stock')
       .filter(stock => !req.query.exchange || stock.exchange === req.query.exchange)
       .filter(stock => !req.query.query || 
@@ -124,7 +133,6 @@ async function searchAndFilterStocks(req: any, res: any) {
             return null;
           }
 
-          // Construct stock data
           const stockData = {
             id: stock.symbol,
             symbol: stock.symbol,
@@ -146,18 +154,6 @@ async function searchAndFilterStocks(req: any, res: any) {
             timestamp: Date.now()
           });
 
-          // Broadcast update if we have valid price data
-          if (quote.c > 0) {
-            broadcastStockUpdate({
-              symbol: stock.symbol,
-              data: {
-                price: quote.c,
-                change: quote.d || 0,
-                timestamp: new Date().toISOString()
-              }
-            });
-          }
-
           return stockData;
         } catch (error) {
           log(`Error processing ${stock.symbol}: ${error}`, 'error');
@@ -172,21 +168,6 @@ async function searchAndFilterStocks(req: any, res: any) {
       if (i + BATCH_SIZE < activeStocks.length) {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
-    }
-
-    // Sort if requested
-    if (req.query.sort) {
-      const [field, order] = req.query.sort.split(':');
-      stocks.sort((a, b) => {
-        if (typeof a[field] === 'string' && typeof b[field] === 'string') {
-          return order === 'desc' 
-            ? b[field].localeCompare(a[field])
-            : a[field].localeCompare(b[field]);
-        }
-        const aVal = Number(a[field]) || 0;
-        const bVal = Number(b[field]) || 0;
-        return order === 'desc' ? bVal - aVal : aVal - bVal;
-      });
     }
 
     log(`Sending ${stocks.length} stocks`, 'search');
@@ -267,9 +248,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = await finnhubRequest('/calendar/ipo');
       if (!data || !data.ipoCalendar) {
-        log('No IPO calendar data available', 'api');
+        log('No IPO calendar data', 'api');
         return res.json([]);
       }
+      log(`Got ${data.ipoCalendar.length} IPO events`, 'api');
       res.json(data.ipoCalendar);
     } catch (error) {
       log(`IPO calendar error: ${error}`, 'error');
