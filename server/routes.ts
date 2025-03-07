@@ -11,6 +11,16 @@ const clients = new Set<WebSocket>();
 // Test stocks for real-time updates
 const testStocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'];
 
+// Heartbeat interval (30 seconds)
+const HEARTBEAT_INTERVAL = 30000;
+
+// Send ping to keep connection alive
+function heartbeat(ws: WebSocket) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.ping();
+  }
+}
+
 // Mock function to simulate real-time stock updates
 function startStockUpdates(wss: WebSocketServer) {
   setInterval(() => {
@@ -40,7 +50,7 @@ function startStockUpdates(wss: WebSocketServer) {
       };
 
       // Broadcast to all connected clients
-      clients.forEach(client => {
+      for (const client of clients) {
         if (client.readyState === WebSocket.OPEN) {
           try {
             client.send(JSON.stringify(mockUpdate));
@@ -48,8 +58,10 @@ function startStockUpdates(wss: WebSocketServer) {
             console.error(`Failed to send update to client: ${error}`);
             clients.delete(client);
           }
+        } else if (client.readyState !== WebSocket.CONNECTING) {
+          clients.delete(client);
         }
-      });
+      }
     });
   }, 2000); // Update every 2 seconds
 }
@@ -57,24 +69,33 @@ function startStockUpdates(wss: WebSocketServer) {
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
-  // Create WebSocket server
+  // Create WebSocket server with explicit port
   const wss = new WebSocketServer({ 
-    server: httpServer, 
+    server: httpServer,
     path: '/ws',
-    perMessageDeflate: false // Disable compression for better performance
+    perMessageDeflate: false
   });
 
   wss.on('connection', (ws: WebSocket) => {
     console.log('Client connected to WebSocket');
     clients.add(ws);
 
+    // Set up heartbeat
+    const heartbeatInterval = setInterval(() => heartbeat(ws), HEARTBEAT_INTERVAL);
+
+    // Handle pong responses
+    ws.on('pong', () => {
+      ws.isAlive = true;
+    });
+
     // Send initial data immediately
     testStocks.forEach(symbol => {
+      const basePrice = symbol === 'AAPL' ? 175 : 285;
       const initialUpdate = {
         type: 'stockUpdate',
         data: {
           symbol,
-          price: 100,
+          price: basePrice,
           change: 0,
           timestamp: new Date().toISOString()
         }
@@ -93,19 +114,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     ws.on('close', () => {
       console.log('Client disconnected from WebSocket');
+      clearInterval(heartbeatInterval);
       clients.delete(ws);
     });
 
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
+      clearInterval(heartbeatInterval);
       clients.delete(ws);
     });
   });
 
+  // Cleanup inactive connections
+  setInterval(() => {
+    wss.clients.forEach((ws: WebSocket) => {
+      if (!ws.isAlive) {
+        clients.delete(ws);
+        return ws.terminate();
+      }
+      ws.isAlive = false;
+    });
+  }, HEARTBEAT_INTERVAL);
+
   // Start sending mock updates
   startStockUpdates(wss);
 
-  // Get all stocks
+  // Rest of your routes...
   app.get("/api/stocks", async (req, res) => {
     const stocks = await storage.getStocks();
     res.json(stocks);

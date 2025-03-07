@@ -18,6 +18,8 @@ interface Stock {
   isFavorite?: boolean;
 }
 
+const queryClient = new QueryClient();
+
 // Initial test data
 const initialStocks: Stock[] = [
   {
@@ -46,8 +48,6 @@ const initialStocks: Stock[] = [
   }
 ];
 
-const queryClient = new QueryClient();
-
 function StockApp() {
   const [stocks, setStocks] = useState<Stock[]>(initialStocks);
   const [loading, setLoading] = useState(false);
@@ -56,17 +56,18 @@ function StockApp() {
 
   // Handle real-time updates
   useEffect(() => {
-    if (!lastMessage?.type || !lastMessage?.data) return;
-    if (lastMessage.type !== 'stockUpdate') return;
+    if (!lastMessage?.data) return;
 
     const update = lastMessage.data;
+    if (lastMessage.type !== 'stockUpdate') return;
+
     setStocks(prevStocks => 
       prevStocks.map(stock => {
         if (stock.symbol === update.symbol) {
           const changePercent = ((update.price - stock.price) / stock.price) * 100;
 
           // Send notification for favorite stocks with significant changes
-          if (stock.isFavorite && Math.abs(changePercent) >= 1) {
+          if (stock.isFavorite && Math.abs(changePercent) >= 1 && permissionGranted) {
             sendNotification(
               `${stock.symbol} Alert!`,
               {
@@ -89,7 +90,7 @@ function StockApp() {
         return stock;
       })
     );
-  }, [lastMessage, sendNotification]); // Only depend on lastMessage and sendNotification
+  }, [lastMessage]); // Remove sendNotification and permissionGranted from dependencies
 
   const toggleFavorite = async (stockId: string) => {
     if (!permissionGranted) {
@@ -104,16 +105,6 @@ function StockApp() {
           alert('Please enable notifications in your browser settings to receive stock alerts');
           return;
         }
-      } else {
-        // User declined notification permission but still allow favoriting
-        setStocks(prevStocks =>
-          prevStocks.map(stock =>
-            stock.id === stockId
-              ? { ...stock, isFavorite: !stock.isFavorite }
-              : stock
-          )
-        );
-        return;
       }
     }
 
@@ -176,11 +167,11 @@ function StockApp() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
-                        <p className={`text-sm ${stock.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {stock.change >= 0 ? '↑' : '↓'} {Math.abs(stock.change)}%
+                        <p className={`text-sm ${stock.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {stock.changePercent >= 0 ? '↑' : '↓'} {Math.abs(stock.changePercent).toFixed(2)}%
                         </p>
                       </div>
-                      <button
+                      <button 
                         className="hover:bg-accent/50 p-2 rounded-full transition-colors"
                         onClick={() => toggleFavorite(stock.id)}
                         title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
