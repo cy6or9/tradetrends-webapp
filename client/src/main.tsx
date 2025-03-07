@@ -47,8 +47,8 @@ try {
   );
 
   // If test component renders successfully, load the full app
-  import('./App').then(({ default: App }) => {
-    setTimeout(() => {
+  setTimeout(() => {
+    import('./App').then(({ default: App }) => {
       root.render(
         <React.StrictMode>
           <QueryClientProvider client={queryClient}>
@@ -56,11 +56,11 @@ try {
           </QueryClientProvider>
         </React.StrictMode>
       );
-    }, 1000); // Give a second to see if test component renders
-  }).catch(error => {
-    console.error('Failed to load App:', error);
-    throw error;
-  });
+    }).catch(error => {
+      console.error('Failed to load App:', error);
+      throw error;
+    });
+  }, 1000); // Give a second to see if test component renders
 
 } catch (error) {
   console.error("Failed to render app:", error);
