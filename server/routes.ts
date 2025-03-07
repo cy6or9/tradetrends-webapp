@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import { type Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
@@ -11,9 +11,14 @@ import express from 'express';
 const clients = new Set<WebSocket>();
 
 // Finnhub API configuration
-const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY || process.env.VITE_FINNHUB_API_KEY;
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
 const RATE_LIMIT_DELAY = 250; // ms between requests
+
+function log(message: string, source = 'server') {
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`[${timestamp}] [${source}]: ${message}`);
+}
 
 // Broadcast stock update to all connected clients
 function broadcastStockUpdate(update: any) {
@@ -32,11 +37,9 @@ function broadcastStockUpdate(update: any) {
       try {
         client.send(JSON.stringify(message));
       } catch (error) {
-        console.error(`Failed to send update to client: ${error}`);
+        log(`Failed to send update to client: ${error}`, 'websocket');
         clients.delete(client);
       }
-    } else if (client.readyState !== WebSocket.CONNECTING) {
-      clients.delete(client);
     }
   }
 }
@@ -44,40 +47,36 @@ function broadcastStockUpdate(update: any) {
 // Proxy middleware for Finnhub API requests
 async function proxyFinnhubRequest(endpoint: string, req: express.Request, res: express.Response) {
   if (!FINNHUB_API_KEY) {
-    console.error('Finnhub API key not configured');
-    return res.status(500).json({ error: 'Finnhub API key not configured' });
+    log('Finnhub API key not configured', 'error');
+    return res.status(500).json({ error: 'API key not configured' });
   }
 
   try {
     const url = `${FINNHUB_API_URL}${endpoint}`;
     const fullUrl = url.includes('?') ? `${url}&token=${FINNHUB_API_KEY}` : `${url}?token=${FINNHUB_API_KEY}`;
 
-    console.log(`Proxying request to: ${endpoint}`);
+    log(`Proxying request to: ${endpoint}`, 'proxy');
+    log(`Full URL (token hidden): ${fullUrl.replace(FINNHUB_API_KEY, 'HIDDEN')}`, 'proxy');
 
-    const response = await fetch(fullUrl, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Finnhub-Token': FINNHUB_API_KEY
-      }
-    });
-
-    console.log(`Finnhub response status: ${response.status}`);
-
-    if (response.status === 429) {
-      console.log('Rate limit hit, retrying after delay...');
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      return proxyFinnhubRequest(endpoint, req, res);
-    }
-
-    if (!response.ok) {
-      throw new Error(`Finnhub API request failed: ${response.status} ${response.statusText}`);
-    }
+    const response = await fetch(fullUrl);
+    log(`Finnhub response status: ${response.status}`, 'proxy');
 
     const data = await response.json();
-    console.log(`Successfully received data for ${endpoint}`);
+
+    if (!response.ok) {
+      log(`Finnhub error response: ${JSON.stringify(data)}`, 'error');
+      return res.status(response.status).json(data);
+    }
+
+    // Log response summary for debugging
+    let responseSummary = JSON.stringify(data);
+    if (responseSummary.length > 80) {
+      responseSummary = responseSummary.slice(0, 79) + "…";
+    }
+    log(`Successfully received data for ${endpoint}: ${responseSummary}`, 'proxy');
     res.json(data);
   } catch (error) {
-    console.error('Proxy error:', error);
+    log(`Proxy error: ${error}`, 'error');
     res.status(500).json({ error: 'Failed to fetch data from Finnhub' });
   }
 }
@@ -94,7 +93,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // WebSocket connection handling
   wss.on('connection', (ws: WebSocket) => {
-    console.log('Client connected to WebSocket');
+    log('Client connected to WebSocket', 'websocket');
     clients.add(ws);
 
     // Set up heartbeat
@@ -111,13 +110,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Handle errors and disconnection
     ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+      log(`WebSocket error: ${error}`, 'error');
       clearInterval(heartbeatInterval);
       clients.delete(ws);
     });
 
     ws.on('close', () => {
-      console.log('Client disconnected from WebSocket');
+      log('Client disconnected from WebSocket', 'websocket');
       clearInterval(heartbeatInterval);
       clients.delete(ws);
     });
@@ -141,7 +140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const expectedSecret = process.env.EXPECTED_WEBHOOK_SECRET;
 
     if (!signature || !expectedSecret) {
-      console.error('Missing webhook signature or secret');
+      log('Missing webhook signature or secret', 'error');
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
@@ -152,18 +151,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .digest('hex');
 
     if (signature !== computedSignature) {
-      console.error('Invalid webhook signature');
+      log('Invalid webhook signature', 'error');
       return res.status(401).json({ message: 'Invalid signature' });
     }
 
     // Process and broadcast the update
     try {
-      console.log('Received Finnhub webhook:', req.body);
+      log('Received Finnhub webhook data', 'webhook');
       broadcastStockUpdate(req.body);
       res.status(200).json({ message: 'Update processed' });
     } catch (error) {
-      console.error('Error processing webhook:', error);
+      log(`Error processing webhook: ${error}`, 'error');
       res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+  // Test endpoint to verify API key
+  app.get("/api/finnhub/test", async (req, res) => {
+    try {
+      const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
+      const data = await response.json();
+      log('API test response:', 'test');
+      res.json({ status: response.status, data: data.slice(0, 2) });
+    } catch (error) {
+      log(`API test error: ${error}`, 'error');
+      res.status(500).json({ error: 'API test failed' });
     }
   });
 
