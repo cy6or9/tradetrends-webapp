@@ -5,7 +5,6 @@ import { storage } from "./storage";
 import { insertStockSchema, insertFavoriteSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import crypto from 'crypto';
-import express from 'express';
 
 // Store connected clients
 const clients = new Set<WebSocket>();
@@ -13,7 +12,9 @@ const clients = new Set<WebSocket>();
 // Finnhub API configuration
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const RATE_LIMIT_DELAY = 250; // ms between requests
+const RATE_LIMIT_DELAY = 100; // ms between requests
+const BATCH_SIZE = 30; // Process fewer stocks at once
+const MAX_RETRIES = 3;
 
 function log(message: string, source = 'server') {
   const timestamp = new Date().toLocaleTimeString();
@@ -32,7 +33,7 @@ function broadcastStockUpdate(update: any) {
     }
   };
 
-  for (const client of clients) {
+  clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       try {
         client.send(JSON.stringify(message));
@@ -41,7 +42,46 @@ function broadcastStockUpdate(update: any) {
         clients.delete(client);
       }
     }
+  });
+}
+
+// Utility function for API requests with retries and backoff
+async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<any> {
+  let lastError;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const url = `${FINNHUB_API_URL}${endpoint}`;
+      const fullUrl = url.includes('?') ? `${url}&token=${FINNHUB_API_KEY}` : `${url}?token=${FINNHUB_API_KEY}`;
+
+      log(`Attempting Finnhub request: ${endpoint} (attempt ${i + 1}/${retries})`, 'api');
+      const response = await fetch(fullUrl);
+      log(`Finnhub response status: ${response.status}`, 'api');
+
+      if (response.status === 429) {
+        const delay = RATE_LIMIT_DELAY * Math.pow(2, i);
+        log(`Rate limited, waiting ${delay}ms before retry ${i + 1}/${retries}`, 'api');
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Finnhub API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      log(`Finnhub request successful: ${endpoint}`, 'api');
+      return data;
+    } catch (error) {
+      lastError = error;
+      log(`Finnhub request failed: ${error}`, 'error');
+      if (i < retries - 1) {
+        const delay = RATE_LIMIT_DELAY * Math.pow(2, i);
+        log(`Retrying in ${delay}ms (${i + 1}/${retries})`, 'api');
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
   }
+  throw lastError;
 }
 
 // Update the searchAndFilterStocks function to be more resilient
@@ -49,35 +89,22 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
   const { query, exchange, sort, minPrice, maxPrice, minMarketCap, maxMarketCap } = req.query;
 
   try {
-    log('Search request params:', JSON.stringify({ 
+    log(`Stock search request: ${JSON.stringify({ 
       query, exchange, sort, minPrice, maxPrice, minMarketCap, maxMarketCap 
-    }), 'search');
+    })}`, 'search');
 
-    // Get base stock list from Finnhub with retries
-    let response;
-    let retryCount = 0;
-    const maxRetries = 3;
+    // Get base stock list
+    log('Fetching stock symbols from Finnhub...', 'search');
+    const symbols = await finnhubRequest('/stock/symbol?exchange=US');
 
-    while (retryCount < maxRetries) {
-      try {
-        response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
-        if (response.ok) break;
-        retryCount++;
-        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
-      } catch (error) {
-        log(`Attempt ${retryCount + 1} failed: ${error}`, 'error');
-        retryCount++;
-        if (retryCount === maxRetries) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-      }
+    if (!Array.isArray(symbols)) {
+      log('Invalid response from Finnhub: symbols is not an array', 'error');
+      throw new Error('Invalid response from Finnhub API');
     }
 
-    if (!response?.ok) {
-      throw new Error(`Failed to fetch stocks after ${maxRetries} attempts`);
-    }
+    log(`Received ${symbols.length} symbols from Finnhub`, 'search');
 
-    let stocks = await response.json();
-    stocks = stocks.filter((stock: any) => 
+    const activeStocks = symbols.filter((stock: any) => 
       stock.type === 'Common Stock' && 
       (!exchange || stock.exchange === exchange) &&
       (!query || 
@@ -85,81 +112,81 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
         stock.description.toLowerCase().includes(query.toString().toLowerCase()))
     );
 
-    log(`Filtered to ${stocks.length} stocks`, 'search');
+    log(`Filtered to ${activeStocks.length} active stocks`, 'search');
 
-    // Get quotes and profiles for filtered stocks with rate limiting
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-    const RATE_LIMIT = 30; // requests per second
-    const BATCH_SIZE = Math.floor(1000 / RATE_LIMIT); // Batch size based on rate limit
+    const stocks: any[] = [];
+    for (let i = 0; i < activeStocks.length; i += BATCH_SIZE) {
+      const batch = activeStocks.slice(i, i + BATCH_SIZE);
+      log(`Processing batch ${i / BATCH_SIZE + 1}: ${batch.length} stocks`, 'search');
 
-    const quotedStocks = [];
-    for (let i = 0; i < stocks.length; i += BATCH_SIZE) {
-      const batch = stocks.slice(i, i + BATCH_SIZE);
       const batchPromises = batch.map(async (stock: any) => {
         try {
-          await delay(RATE_LIMIT_DELAY); // Rate limiting delay
+          await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
 
-          const [quoteRes, profileRes] = await Promise.all([
-            fetch(`${FINNHUB_API_URL}/quote?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`),
-            fetch(`${FINNHUB_API_URL}/stock/profile2?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`)
+          const [quote, profile] = await Promise.all([
+            finnhubRequest(`/quote?symbol=${stock.symbol}`).catch(() => ({})),
+            finnhubRequest(`/stock/profile2?symbol=${stock.symbol}`).catch(() => ({}))
           ]);
 
-          let quote = { c: 0, d: 0, dp: 0, v: 0 };
-          let profile = { marketCapitalization: 0, industry: 'Unknown', weekHigh52: 0, weekLow52: 0, beta: 0 };
-
-          if (quoteRes.ok) {
-            quote = await quoteRes.json();
-          }
-
-          if (profileRes.ok) {
-            profile = await profileRes.json();
-          }
-
           const stockData = {
-            ...stock,
+            id: stock.symbol,
+            symbol: stock.symbol,
+            name: profile.name || stock.description,
             price: quote.c || 0,
             change: quote.d || 0,
             changePercent: quote.dp || 0,
             volume: quote.v || 0,
-            marketCap: profile.marketCapitalization * 1e6 || 0,
+            marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
             high52Week: profile.weekHigh52 || 0,
             low52Week: profile.weekLow52 || 0,
             beta: profile.beta || 0,
-            industry: profile.industry || 'Unknown'
+            exchange: stock.exchange,
+            industry: profile.industry || 'Unknown',
+            lastUpdate: new Date().toISOString()
           };
 
-          // Apply numeric filters
-          if (minPrice && stockData.price < Number(minPrice)) return null;
-          if (maxPrice && stockData.price > Number(maxPrice)) return null;
-          if (minMarketCap && stockData.marketCap < Number(minMarketCap)) return null;
-          if (maxMarketCap && stockData.marketCap > Number(maxMarketCap)) return null;
-
+          log(`Processed ${stock.symbol} successfully`, 'search');
           return stockData;
         } catch (error) {
           log(`Error processing ${stock.symbol}: ${error}`, 'error');
           // Return basic stock info even if API calls fail
           return {
-            ...stock,
+            id: stock.symbol,
+            symbol: stock.symbol,
+            name: stock.description,
             price: 0,
             change: 0,
             changePercent: 0,
             volume: 0,
             marketCap: 0,
             beta: 0,
-            industry: 'Unknown'
+            exchange: stock.exchange,
+            industry: 'Unknown',
+            lastUpdate: new Date().toISOString()
           };
         }
       });
 
       const batchResults = await Promise.all(batchPromises);
-      quotedStocks.push(...batchResults.filter(s => s !== null));
-      log(`Processed ${quotedStocks.length}/${stocks.length} stocks`, 'search');
+      stocks.push(...batchResults);
+      log(`Completed batch. Total stocks processed: ${stocks.length}/${activeStocks.length}`, 'search');
     }
+
+    // Apply numeric filters
+    const filteredStocks = stocks.filter(stock => {
+      if (minPrice && stock.price < Number(minPrice)) return false;
+      if (maxPrice && stock.price > Number(maxPrice)) return false;
+      if (minMarketCap && stock.marketCap < Number(minMarketCap)) return false;
+      if (maxMarketCap && stock.marketCap > Number(maxMarketCap)) return false;
+      return true;
+    });
+
+    log(`Applied filters: ${filteredStocks.length} stocks remaining`, 'search');
 
     // Apply sorting
     if (sort) {
       const [field, order] = sort.toString().split(':');
-      quotedStocks.sort((a: any, b: any) => {
+      filteredStocks.sort((a: any, b: any) => {
         let aVal = a[field];
         let bVal = b[field];
 
@@ -172,55 +199,19 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
             aVal.localeCompare(bVal);
         }
 
-        // Handle numeric comparisons with null/undefined values
+        // Handle numeric comparisons
         aVal = Number(aVal) || 0;
         bVal = Number(bVal) || 0;
         return order === 'desc' ? bVal - aVal : aVal - bVal;
       });
+      log(`Sorted stocks by ${field} ${order}`, 'search');
     }
 
-    log(`Sending ${quotedStocks.length} stocks after sorting`, 'search');
-    res.json(quotedStocks);
+    log(`Sending ${filteredStocks.length} stocks after filtering and sorting`, 'search');
+    res.json(filteredStocks);
   } catch (error) {
     log(`Search error: ${error}`, 'error');
     res.status(500).json({ error: 'Failed to search stocks' });
-  }
-}
-
-// Proxy middleware for Finnhub API requests
-async function proxyFinnhubRequest(endpoint: string, req: express.Request, res: express.Response) {
-  if (!FINNHUB_API_KEY) {
-    log('Finnhub API key not configured', 'error');
-    return res.status(500).json({ error: 'API key not configured' });
-  }
-
-  try {
-    const url = `${FINNHUB_API_URL}${endpoint}`;
-    const fullUrl = url.includes('?') ? `${url}&token=${FINNHUB_API_KEY}` : `${url}?token=${FINNHUB_API_KEY}`;
-
-    log(`Proxying request to: ${endpoint}`, 'proxy');
-    log(`Full URL (token hidden): ${fullUrl.replace(FINNHUB_API_KEY, 'HIDDEN')}`, 'proxy');
-
-    const response = await fetch(fullUrl);
-    log(`Finnhub response status: ${response.status}`, 'proxy');
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      log(`Finnhub error response: ${JSON.stringify(data)}`, 'error');
-      return res.status(response.status).json(data);
-    }
-
-    // Log response summary for debugging
-    let responseSummary = JSON.stringify(data);
-    if (responseSummary.length > 80) {
-      responseSummary = responseSummary.slice(0, 79) + "…";
-    }
-    log(`Successfully received data for ${endpoint}: ${responseSummary}`, 'proxy');
-    res.json(data);
-  } catch (error) {
-    log(`Proxy error: ${error}`, 'error');
-    res.status(500).json({ error: 'Failed to fetch data from Finnhub' });
   }
 }
 
@@ -233,6 +224,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     path: '/ws',
     perMessageDeflate: false
   });
+
+  log('WebSocket server initialized', 'websocket');
 
   // WebSocket connection handling
   wss.on('connection', (ws: WebSocket) => {
@@ -253,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Handle errors and disconnection
     ws.on('error', (error) => {
-      log(`WebSocket error: ${error}`, 'error');
+      log(`WebSocket error: ${error}`, 'websocket');
       clearInterval(heartbeatInterval);
       clients.delete(ws);
     });
@@ -270,6 +263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     wss.clients.forEach((ws: WebSocket) => {
       const client = ws as any;
       if (!client.isAlive) {
+        log('Removing inactive WebSocket client', 'websocket');
         clients.delete(ws);
         return ws.terminate();
       }
@@ -277,10 +271,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }, 30000);
 
-  // Search and filter endpoint
+  // Register routes
   app.get("/api/stocks/search", searchAndFilterStocks);
+  app.get("/api/finnhub/calendar/ipo", async (_req, res) => {
+    try {
+      const data = await finnhubRequest('/calendar/ipo');
+      res.json(data);
+    } catch (error) {
+      log(`IPO calendar error: ${error}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch IPO calendar' });
+    }
+  });
 
-  // Finnhub API proxy routes
   app.get("/api/finnhub/quote", (req, res) => {
     const symbol = req.query.symbol as string;
     if (!symbol) {
@@ -301,14 +303,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     proxyFinnhubRequest(`/crypto/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}`, req, res);
   });
 
-  app.get("/api/finnhub/stock/recommendation", (req, res) => {
-    const symbol = req.query.symbol as string;
-    if (!symbol) {
-      return res.status(400).json({ error: 'Symbol parameter is required' });
-    }
-    proxyFinnhubRequest(`/stock/recommendation?symbol=${symbol}`, req, res);
-  });
-
   app.get("/api/finnhub/stock/profile2", (req, res) => {
     const symbol = req.query.symbol as string;
     if (!symbol) {
@@ -317,39 +311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     proxyFinnhubRequest(`/stock/profile2?symbol=${symbol}`, req, res);
   });
 
-  // Webhook endpoint for real-time updates
-  app.post("/webhook", express.json(), (req, res) => {
-    const signature = req.headers['x-finnhub-webhook-signature'];
-    const expectedSecret = process.env.EXPECTED_WEBHOOK_SECRET;
-
-    if (!signature || !expectedSecret) {
-      log('Missing webhook signature or secret', 'error');
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    // Verify webhook signature
-    const computedSignature = crypto
-      .createHmac('sha256', expectedSecret)
-      .update(JSON.stringify(req.body))
-      .digest('hex');
-
-    if (signature !== computedSignature) {
-      log('Invalid webhook signature', 'error');
-      return res.status(401).json({ message: 'Invalid signature' });
-    }
-
-    // Process and broadcast the update
-    try {
-      log('Received Finnhub webhook data', 'webhook');
-      broadcastStockUpdate(req.body);
-      res.status(200).json({ message: 'Update processed' });
-    } catch (error) {
-      log(`Error processing webhook: ${error}`, 'error');
-      res.status(500).json({ message: 'Internal server error' });
-    }
-  });
-
-  // Storage routes...
+  // Storage routes
   app.get("/api/stocks", async (req, res) => {
     const stocks = await storage.getStocks();
     res.json(stocks);
@@ -418,6 +380,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const favorite = await storage.updateFavoriteNotifications(userId, stockId, notify);
     res.json(favorite);
   });
+
+  async function proxyFinnhubRequest(endpoint: string, req: express.Request, res: express.Response) {
+    if (!FINNHUB_API_KEY) {
+      log('Finnhub API key not configured', 'error');
+      return res.status(500).json({ error: 'API key not configured' });
+    }
+
+    try {
+      const data = await finnhubRequest(endpoint);
+      res.json(data);
+    } catch (error) {
+      log(`Proxy error: ${error}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch data from Finnhub' });
+    }
+  }
 
   return httpServer;
 }

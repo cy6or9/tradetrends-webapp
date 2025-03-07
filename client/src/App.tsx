@@ -6,14 +6,16 @@ import { MarketTabs } from "./components/MarketTabs";
 import { StockFilters, type FilterOptions } from "./components/StockFilters";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import type { Stock } from "./lib/finnhub";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ReloadIcon } from "@radix-ui/react-icons";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60000, // Data considered fresh for 1 minute
-      refetchInterval: 60000, // Refetch every minute
+      staleTime: 30000, // Data considered fresh for 30 seconds
+      refetchInterval: 30000, // Refetch every 30 seconds
       retry: 3,
-      retryDelay: 1000,
+      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000),
     },
   },
 });
@@ -30,7 +32,7 @@ function StockApp() {
   const { permissionGranted, sendNotification } = useNotifications();
 
   // Fetch filtered stocks
-  const { data: stocksData, isLoading, error } = useQuery({
+  const { data: stocksData, isLoading, error, refetch } = useQuery({
     queryKey: ['stocks', filters],
     queryFn: async () => {
       try {
@@ -39,7 +41,10 @@ function StockApp() {
           if (value) params.append(key, value.toString());
         }
         const response = await fetch(`/api/stocks/search?${params}`);
-        if (!response.ok) throw new Error('Failed to fetch stocks');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch stocks');
+        }
         const data = await response.json();
         console.log(`Fetched ${data.length} stocks`);
         return data;
@@ -48,10 +53,6 @@ function StockApp() {
         return stocks; // Return current stocks if API fails
       }
     },
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchInterval: 30000, // Refetch every 30 seconds
-    retry: 3,
-    retryDelay: 1000,
   });
 
   // Update local state when query data changes
@@ -96,25 +97,22 @@ function StockApp() {
   // Handle real-time updates
   useEffect(() => {
     if (!lastMessage?.data) return;
-    if (lastMessage.type !== 'stockUpdate') return;
-
-    const update = lastMessage.data;
 
     setStocks(prevStocks => {
       const newStocks = [...prevStocks];
-      const stockIndex = newStocks.findIndex(s => s.symbol === update.symbol);
+      const stockIndex = newStocks.findIndex(s => s.symbol === lastMessage.data.symbol);
 
       if (stockIndex === -1) return prevStocks;
 
       const stock = newStocks[stockIndex];
-      const changePercent = ((update.price - stock.price) / stock.price) * 100;
+      const changePercent = ((lastMessage.data.price - stock.price) / stock.price) * 100;
 
       // Send notification if needed
       if (permissionGranted && stock.isFavorite && Math.abs(changePercent) >= 1) {
         sendNotification(
           `${stock.symbol} Alert!`,
           {
-            body: `Price ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent).toFixed(2)}% to $${update.price.toFixed(2)}`,
+            body: `Price ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent).toFixed(2)}% to $${lastMessage.data.price.toFixed(2)}`,
             icon: '/favicon.ico'
           }
         );
@@ -123,10 +121,10 @@ function StockApp() {
       // Update stock data
       newStocks[stockIndex] = {
         ...stock,
-        price: update.price,
-        change: update.change,
+        price: lastMessage.data.price,
+        change: lastMessage.data.change,
         changePercent,
-        lastUpdate: update.timestamp
+        lastUpdate: lastMessage.data.timestamp
       };
 
       return newStocks;
@@ -166,20 +164,39 @@ function StockApp() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
+          {/* Error Alert */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription className="flex items-center gap-2">
+                {error instanceof Error ? error.message : 'Failed to load stocks'}
+                <button 
+                  onClick={() => refetch()} 
+                  className="ml-2 text-sm underline hover:no-underline"
+                >
+                  Try again
+                </button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Stock List Section */}
           <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
             <h2 className="text-2xl font-semibold mb-4">Live Stock Updates</h2>
             {isLoading ? (
-              <div className="text-center text-muted-foreground">
-                <div className="animate-pulse text-primary">Loading stock data...</div>
-              </div>
-            ) : error ? (
-              <div className="text-center text-destructive">
-                <p>Failed to load stocks. Please try again later.</p>
+              <div className="text-center py-8">
+                <ReloadIcon className="animate-spin h-8 w-8 mx-auto text-primary mb-4" />
+                <p className="text-muted-foreground">Loading stock data...</p>
               </div>
             ) : stocks.length === 0 ? (
-              <div className="text-center text-muted-foreground">
+              <div className="text-center py-8 text-muted-foreground">
                 <p>No stocks found matching your filters.</p>
+                <button 
+                  onClick={() => setFilters({ query: '', exchange: '', sort: 'symbol:asc' })}
+                  className="mt-2 text-sm text-primary hover:underline"
+                >
+                  Reset filters
+                </button>
               </div>
             ) : (
               <div className="space-y-4">
