@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useNotifications } from "./hooks/useNotifications";
 import { MarketTabs } from "./components/MarketTabs";
+import { getStockQuote } from "./lib/finnhub";
 
 interface Stock {
   id: string;
@@ -20,47 +21,90 @@ interface Stock {
 
 const queryClient = new QueryClient();
 
-// Initial test data
-const initialStocks: Stock[] = [
+// List of stocks to track
+const TRACKED_STOCKS = [
   {
     id: "1",
     symbol: "AAPL",
     name: "Apple Inc.",
-    price: 175.0,
-    change: 0,
-    changePercent: 0,
     volume: 55000000,
     marketCap: 2800000000000,
-    analystRating: 92,
-    isFavorite: false
+    analystRating: 92
   },
   {
     id: "2",
     symbol: "MSFT",
     name: "Microsoft Corporation",
-    price: 285.0,
-    change: 0,
-    changePercent: 0,
     volume: 25000000,
     marketCap: 2100000000000,
-    analystRating: 95,
-    isFavorite: false
+    analystRating: 95
+  },
+  {
+    id: "3",
+    symbol: "GOOGL",
+    name: "Alphabet Inc.",
+    volume: 20000000,
+    marketCap: 1900000000000,
+    analystRating: 90
+  },
+  {
+    id: "4",
+    symbol: "AMZN",
+    name: "Amazon.com Inc.",
+    volume: 30000000,
+    marketCap: 1800000000000,
+    analystRating: 88
+  },
+  {
+    id: "5",
+    symbol: "META",
+    name: "Meta Platforms Inc.",
+    volume: 22000000,
+    marketCap: 1200000000000,
+    analystRating: 85
   }
 ];
 
 function StockApp() {
-  const [stocks, setStocks] = useState<Stock[]>(initialStocks);
-  const [loading, setLoading] = useState(false);
+  const [stocks, setStocks] = useState<Stock[]>([]);
+  const [loading, setLoading] = useState(true);
   const { isConnected, lastMessage } = useWebSocket();
-  const { permissionGranted, requestPermission, sendNotification } = useNotifications();
+  const { permissionGranted, sendNotification } = useNotifications();
+
+  // Fetch initial stock data
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      setLoading(true);
+      try {
+        const stocksWithQuotes = await Promise.all(
+          TRACKED_STOCKS.map(async (stock) => {
+            const quote = await getStockQuote(stock.symbol);
+            return {
+              ...stock,
+              price: quote?.c || 0,
+              change: quote?.d || 0,
+              changePercent: quote?.dp || 0,
+              isFavorite: false
+            };
+          })
+        );
+        setStocks(stocksWithQuotes);
+      } catch (error) {
+        console.error('Failed to fetch initial stock data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, []); // Only run once on mount
 
   // Handle real-time updates
   useEffect(() => {
     if (!lastMessage?.data) return;
-
-    const update = lastMessage.data;
     if (lastMessage.type !== 'stockUpdate') return;
 
+    const update = lastMessage.data;
     setStocks(prevStocks => 
       prevStocks.map(stock => {
         if (stock.symbol === update.symbol) {
@@ -74,7 +118,7 @@ function StockApp() {
                 body: `Price ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent).toFixed(2)}% to $${update.price.toFixed(2)}`,
                 icon: '/favicon.ico',
                 badge: '/favicon.ico',
-                tag: stock.symbol // Prevent duplicate notifications for the same stock
+                tag: stock.symbol
               }
             );
           }
@@ -90,11 +134,10 @@ function StockApp() {
         return stock;
       })
     );
-  }, [lastMessage]); // Remove sendNotification and permissionGranted from dependencies
+  }, [lastMessage]); // Only depend on lastMessage
 
   const toggleFavorite = async (stockId: string) => {
     if (!permissionGranted) {
-      // Show a more user-friendly notification request
       const confirmed = window.confirm(
         "To receive alerts when your favorite stocks have significant price changes, we need your permission to send notifications. Would you like to enable notifications?"
       );
@@ -108,7 +151,6 @@ function StockApp() {
       }
     }
 
-    // Toggle favorite status
     setStocks(prevStocks =>
       prevStocks.map(stock =>
         stock.id === stockId
