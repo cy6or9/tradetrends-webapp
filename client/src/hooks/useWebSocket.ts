@@ -18,7 +18,7 @@ export function useWebSocket() {
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const reconnectTimeoutRef = useRef<number>();
 
   const connect = useCallback(() => {
     if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
@@ -35,6 +35,7 @@ export function useWebSocket() {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
+      console.log('Connecting to WebSocket:', wsUrl);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -44,7 +45,7 @@ export function useWebSocket() {
         setIsConnected(true);
         reconnectAttempts.current = 0;
         if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
+          window.clearTimeout(reconnectTimeoutRef.current);
         }
       };
 
@@ -68,8 +69,8 @@ export function useWebSocket() {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
         reconnectAttempts.current++;
 
-        reconnectTimeoutRef.current = setTimeout(() => {
-          console.log(`Attempting to reconnect (${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})...`);
+        console.log(`Attempting to reconnect (${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS}) in ${delay}ms...`);
+        reconnectTimeoutRef.current = window.setTimeout(() => {
           connect();
         }, delay);
       };
@@ -91,7 +92,7 @@ export function useWebSocket() {
     connect();
     return () => {
       if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
+        window.clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();

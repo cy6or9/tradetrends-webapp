@@ -10,7 +10,145 @@ const stockQuoteSchema = z.object({
   o: z.number(), // Open price of the day
   pc: z.number(), // Previous close price
   t: z.number(), // Timestamp
+  v: z.number() //volume
 });
+
+const companyProfileSchema = z.object({
+  marketCapitalization: z.number(),
+  shareOutstanding: z.number(),
+  beta: z.number().optional(),
+  weekHigh52: z.number().optional(),
+  weekLow52: z.number().optional(),
+  weekHighDate52: z.string().optional(),
+  weekLowDate52: z.string().optional(),
+  industry: z.string().optional(),
+  exchange: z.string(),
+  companyName: z.string(),
+  ticker: z.string(),
+});
+
+// Cache manager
+class StockCacheManager {
+  private data = new Map<string, Stock>();
+
+  getStock(symbol: string) {
+    return this.data.get(symbol);
+  }
+
+  updateStock(symbol: string, updates: Partial<Stock>) {
+    const existing = this.data.get(symbol);
+    if (existing) {
+      this.data.set(symbol, { ...existing, ...updates, lastUpdate: new Date().toISOString() });
+    } else {
+      this.data.set(symbol, {...updates, lastUpdate: new Date().toISOString()})
+    }
+  }
+
+  getAllStocks(): Stock[] {
+    return Array.from(this.data.values());
+  }
+}
+
+export const stockCache = new StockCacheManager();
+
+// Types
+export interface Stock {
+  id: string;
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  volume: number;
+  marketCap: number;
+  high52Week: number;
+  low52Week: number;
+  beta: number;
+  exchange: string;
+  industry: string;
+  isFavorite?: boolean;
+  lastUpdate?: string;
+}
+
+export type StockQuote = z.infer<typeof stockQuoteSchema>;
+export type CompanyProfile = z.infer<typeof companyProfileSchema>;
+
+const US_EXCHANGE_SYMBOLS = ['NYSE', 'NASDAQ'];
+const BATCH_SIZE = 5; // Process 5 stocks at a time
+const RATE_LIMIT_DELAY = 250; // ms between batches
+
+// API Functions
+export async function getAllUsStocks(): Promise<Stock[]> {
+  try {
+    console.log('Fetching US stocks...');
+    const symbols = await fetch('/api/finnhub/stock/symbol').then(res => res.json());
+
+    const activeStocks = symbols
+      .filter((stock: any) =>
+        US_EXCHANGE_SYMBOLS.includes(stock.exchange) &&
+        stock.type === 'Common Stock'
+      )
+      .slice(0, 200); // Top 200 stocks
+
+    console.log(`Processing ${activeStocks.length} stocks...`);
+    const stocks: Stock[] = [];
+
+    // Process in batches to respect rate limits
+    for (let i = 0; i < activeStocks.length; i += BATCH_SIZE) {
+      const batch = activeStocks.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map(async (stock: any) => {
+        try {
+          // Get quote and company profile in parallel
+          const [quoteRes, profileRes] = await Promise.all([
+            fetch(`/api/finnhub/quote?symbol=${stock.symbol}`),
+            fetch(`/api/finnhub/stock/profile2?symbol=${stock.symbol}`)
+          ]);
+
+          const quote = await quoteRes.json();
+          const profile = await profileRes.json();
+
+          if (!quoteRes.ok || !profileRes.ok) {
+            console.warn(`Failed to fetch data for ${stock.symbol}`);
+            return null;
+          }
+
+          return {
+            id: stock.symbol,
+            symbol: stock.symbol,
+            name: profile.companyName || stock.description,
+            price: quote.c || 0,
+            change: quote.d || 0,
+            changePercent: quote.dp || 0,
+            volume: quote.v || 0,
+            marketCap: profile.marketCapitalization * 1e6 || 0, // Convert to actual value
+            high52Week: profile.weekHigh52 || 0,
+            low52Week: profile.weekLow52 || 0,
+            beta: profile.beta || 0,
+            exchange: stock.exchange,
+            industry: profile.industry || 'Unknown',
+            isFavorite: false,
+            lastUpdate: new Date().toISOString()
+          };
+        } catch (error) {
+          console.error(`Error processing ${stock.symbol}:`, error);
+          return null;
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      stocks.push(...batchResults.filter((s): s is Stock => s !== null));
+
+      // Rate limiting delay between batches
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+    }
+
+    console.log(`Successfully processed ${stocks.length} stocks`);
+    return stocks;
+  } catch (error) {
+    console.error('Error fetching US stocks:', error);
+    return [];
+  }
+}
 
 const cryptoCandleSchema = z.object({
   c: z.array(z.number()),
@@ -43,144 +181,6 @@ const recommendationSchema = z.object({
   symbol: z.string(),
 });
 
-// Cache manager
-class StockCacheManager {
-  private data = new Map<string, { lastPrice: number; analystRating: number; lastUpdate: string }>();
-
-  getStock(symbol: string) {
-    return this.data.get(symbol);
-  }
-
-  updateStock(symbol: string, price: number, analystRating?: number) {
-    const existing = this.data.get(symbol);
-    this.data.set(symbol, {
-      lastPrice: price,
-      analystRating: analystRating ?? existing?.analystRating ?? 0,
-      lastUpdate: new Date().toISOString()
-    });
-  }
-}
-
-export const stockCache = new StockCacheManager();
-
-// Types
-export interface Stock {
-  id: string;
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume: number;
-  marketCap: number;
-  analystRating: number;
-  exchange: string;
-  isFavorite?: boolean;
-  lastUpdate?: string;
-}
-
-export type StockQuote = z.infer<typeof stockQuoteSchema>;
-export type CryptoQuote = {
-  c: number; // Current price
-  h: number; // High price
-  l: number; // Low price
-  o: number; // Open price
-  pc: number; // Previous close price
-  t: number; // Timestamp
-};
-
-const US_EXCHANGE_SYMBOLS = ['NYSE', 'NASDAQ'];
-const BATCH_SIZE = 5; // Process 5 stocks at a time
-const RATE_LIMIT_DELAY = 250; // ms between batches
-
-// API Functions
-export async function getAllUsStocks(): Promise<Stock[]> {
-  try {
-    console.log('Fetching US stocks...');
-    const symbols = await fetch('/api/finnhub/stock/symbol').then(res => res.json());
-
-    const activeStocks = symbols
-      .filter((stock: any) => 
-        US_EXCHANGE_SYMBOLS.includes(stock.exchange) && 
-        stock.type === 'Common Stock'
-      )
-      .slice(0, 200); // Top 200 stocks
-
-    console.log(`Processing ${activeStocks.length} stocks...`);
-    const stocks: Stock[] = [];
-
-    // Process in batches to respect rate limits
-    for (let i = 0; i < activeStocks.length; i += BATCH_SIZE) {
-      const batch = activeStocks.slice(i, i + BATCH_SIZE);
-      const batchPromises = batch.map(async (stock: any) => {
-        try {
-          // Get cached data if available
-          const cached = stockCache.getStock(stock.symbol);
-
-          // Fetch current quote
-          let quote;
-          try {
-            quote = await fetch(`/api/finnhub/quote?symbol=${stock.symbol}`).then(res => res.json());
-          } catch (error) {
-            console.warn(`Failed to fetch quote for ${stock.symbol}, using cached data`);
-            quote = null;
-          }
-
-          // Get price from quote or cache
-          const price = quote?.c || cached?.lastPrice || 0;
-
-          // Fetch analyst recommendations
-          let analystRating = cached?.analystRating ?? 0;
-          try {
-            const recommendations = await fetch(`/api/finnhub/stock/recommendation?symbol=${stock.symbol}`).then(res => res.json());
-            if (recommendations && recommendations.length > 0) {
-              const latest = recommendations[0];
-              const totalRecs = latest.strongBuy + latest.buy + latest.hold + latest.sell + latest.strongSell;
-              if (totalRecs > 0) {
-                analystRating = ((latest.strongBuy + latest.buy) / totalRecs) * 100;
-              }
-            }
-          } catch (error) {
-            console.warn(`Failed to fetch recommendations for ${stock.symbol}, using cached rating`);
-          }
-
-          // Update cache
-          stockCache.updateStock(stock.symbol, price, analystRating);
-
-          return {
-            id: stock.symbol,
-            symbol: stock.symbol,
-            name: stock.description,
-            price,
-            change: quote?.d || 0,
-            changePercent: quote?.dp || 0,
-            volume: 0,
-            marketCap: 0,
-            analystRating,
-            exchange: stock.exchange,
-            isFavorite: false,
-            lastUpdate: new Date().toISOString()
-          };
-        } catch (error) {
-          console.error(`Error processing ${stock.symbol}:`, error);
-          return null;
-        }
-      });
-
-      const batchResults = await Promise.all(batchPromises);
-      stocks.push(...batchResults.filter((s): s is Stock => s !== null));
-
-      // Rate limiting delay between batches
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-    }
-
-    console.log(`Successfully processed ${stocks.length} stocks`);
-    return stocks.sort((a, b) => b.analystRating - a.analystRating);
-  } catch (error) {
-    console.error('Error fetching US stocks:', error);
-    return [];
-  }
-}
 
 export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null> {
   try {
@@ -257,6 +257,15 @@ function getFinnhubApiKey(): string {
 const ipoEventSchema = z.object({});
 const stockNewsSchema = z.object({});
 const spacSchema = z.object({});
+
+export type CryptoQuote = {
+  c: number; // Current price
+  h: number; // High price
+  l: number; // Low price
+  o: number; // Open price
+  pc: number; // Previous close price
+  t: number; // Timestamp
+};
 
 export type StockNews = z.infer<typeof stockNewsSchema>;
 export type IpoEvent = z.infer<typeof ipoEventSchema>;

@@ -8,9 +8,24 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-interface StockFiltersProps {
-  onFilterChange: (filters: FilterOptions) => void;
-}
+const SORT_OPTIONS = [
+  { value: 'symbol:asc', label: 'Symbol: A to Z' },
+  { value: 'symbol:desc', label: 'Symbol: Z to A' },
+  { value: 'price:asc', label: 'Price: Low to High' },
+  { value: 'price:desc', label: 'Price: High to Low' },
+  { value: 'changePercent:desc', label: 'Biggest Gainers' },
+  { value: 'changePercent:asc', label: 'Biggest Losers' },
+  { value: 'marketCap:desc', label: 'Market Cap: Highest' },
+  { value: 'marketCap:asc', label: 'Market Cap: Lowest' },
+  { value: 'volume:desc', label: 'Volume: Highest' },
+  { value: 'volume:asc', label: 'Volume: Lowest' },
+  { value: 'high52Week:desc', label: '52-Week High: Highest' },
+  { value: 'low52Week:asc', label: '52-Week Low: Lowest' },
+  { value: 'beta:desc', label: 'Volatility (Beta): Highest' },
+  { value: 'beta:asc', label: 'Volatility (Beta): Lowest' },
+];
+
+const EXCHANGES = ['NYSE', 'NASDAQ'];
 
 export interface FilterOptions {
   query: string;
@@ -18,22 +33,19 @@ export interface FilterOptions {
   sort: string;
   minPrice?: number;
   maxPrice?: number;
+  minMarketCap?: number;
+  maxMarketCap?: number;
 }
 
-const EXCHANGES = ['NYSE', 'NASDAQ'];
-const SORT_OPTIONS = [
-  { value: 'price:asc', label: 'Price: Low to High' },
-  { value: 'price:desc', label: 'Price: High to Low' },
-  { value: 'changePercent:desc', label: 'Biggest Gainers' },
-  { value: 'changePercent:asc', label: 'Biggest Losers' },
-  { value: 'symbol:asc', label: 'Symbol: A to Z' },
-];
+interface StockFiltersProps {
+  onFilterChange: (filters: FilterOptions) => void;
+}
 
 export function StockFilters({ onFilterChange }: StockFiltersProps) {
   const [filters, setFilters] = useState<FilterOptions>({
     query: '',
     exchange: '',
-    sort: 'symbol:asc',
+    sort: 'marketCap:desc' // Default sort by market cap
   });
 
   const handleFilterChange = (name: keyof FilterOptions, value: string | number) => {
@@ -127,7 +139,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               const defaultFilters = {
                 query: '',
                 exchange: '',
-                sort: 'symbol:asc',
+                sort: 'marketCap:desc',
               };
               setFilters(defaultFilters);
               onFilterChange(defaultFilters);
