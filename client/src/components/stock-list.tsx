@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,13 +26,21 @@ interface StockListProps {
     sortBy?: string;
     sortDir?: "asc" | "desc";
   };
+  setStocks?: (stocks: any[]) => void;
 }
 
-export function StockList({ filters }: StockListProps) {
+export function StockList({ filters, setStocks }: StockListProps) {
   const { data: stocks, isLoading } = useQuery({
     queryKey: ["/api/stocks", filters],
     queryFn: getAllUsStocks,
   });
+
+  // Update parent component with stock count when data changes
+  useEffect(() => {
+    if (stocks?.length) {
+      setStocks?.(stocks); //Added ? to handle optional setStocks
+    }
+  }, [stocks, setStocks]);
 
   if (isLoading) {
     return (
@@ -72,7 +80,7 @@ export function StockList({ filters }: StockListProps) {
 
       // Handle string comparison
       if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return filters.sortDir === "asc" 
+        return filters.sortDir === "asc"
           ? aVal.localeCompare(bVal)
           : bVal.localeCompare(aVal);
       }

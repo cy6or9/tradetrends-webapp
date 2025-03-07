@@ -71,13 +71,13 @@ export default function Home() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle className="text-4xl font-bold">Stock Market Analysis</CardTitle>
+                  <CardTitle className="text-4xl font-bold">TradeTrends</CardTitle>
                   <p className="text-muted-foreground mt-2">
-                    Track stocks with high analyst ratings and market momentum
+                    Advanced stock market analysis filtering & trending trade data tracker for better investing
                   </p>
                 </div>
                 <ErrorBoundary fallback={null}>
-                  <WebSocketStatus stockCount={stocks?.length || 0} /> {/* Updated line */}
+                  <WebSocketStatus stockCount={stocks?.length || 0} />
                 </ErrorBoundary>
               </div>
             </CardHeader>
@@ -86,7 +86,7 @@ export default function Home() {
           {/* Main stock list - all traceable stocks */}
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">All Stocks</h2>
-            <StockList filters={filters} />
+            <StockList filters={filters} setStocks={setStocks} />
           </div>
 
           {/* Market sections */}
@@ -104,7 +104,7 @@ export default function Home() {
                   <p className="text-sm text-muted-foreground mb-4">
                     Trending stocks with high analyst ratings (80%+) and significant price movement today
                   </p>
-                  <StockList filters={hotStocksFilter} />
+                  <StockList filters={hotStocksFilter} setStocks={setStocks} />
                 </div>
               </TabsContent>
 

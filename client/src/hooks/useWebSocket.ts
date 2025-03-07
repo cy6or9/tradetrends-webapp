@@ -11,9 +11,11 @@ interface WebSocketMessage {
 }
 
 export function useWebSocket() {
-  // Temporarily disable WebSocket functionality
+  const [isConnected, setIsConnected] = useState(true); 
+  const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
+
   return {
-    isConnected: false,
-    lastMessage: null as WebSocketMessage | null
+    isConnected,
+    lastMessage
   };
 }
