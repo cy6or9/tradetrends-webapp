@@ -108,7 +108,7 @@ async function searchAndFilterStocks(req: any, res: any) {
 
     // Filter active stocks
     const activeStocks = symbols
-      .slice(0, 50) // Limit initial load to 50 stocks
+      .slice(0, 200) // Increased from 50 to 200 stocks
       .filter(stock => stock.type === 'Common Stock')
       .filter(stock => !req.query.exchange || stock.exchange === req.query.exchange)
       .filter(stock => !req.query.query ||

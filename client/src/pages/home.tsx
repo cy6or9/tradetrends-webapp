@@ -34,6 +34,7 @@ export default function Home() {
   const [filters, setFilters] = useState({});
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("stocks");
+  const [stocks, setStocks] = useState<any[]>([]); // Added state for stocks
 
   // Hot stocks filter - stocks with high analyst ratings and recent movement
   const hotStocksFilter = {
@@ -76,7 +77,7 @@ export default function Home() {
                   </p>
                 </div>
                 <ErrorBoundary fallback={null}>
-                  <WebSocketStatus stockCount={50} />
+                  <WebSocketStatus stockCount={stocks?.length || 0} /> {/* Updated line */}
                 </ErrorBoundary>
               </div>
             </CardHeader>
