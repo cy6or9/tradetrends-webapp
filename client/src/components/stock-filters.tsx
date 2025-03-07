@@ -60,9 +60,9 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
     <Form {...form}>
       <form 
         onChange={() => onFilterChange(form.getValues())}
-        className="space-y-4 p-4 bg-card rounded-lg"
+        className="space-y-4"
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="space-y-4">
           <FormField
             control={form.control}
             name="minPrice"
@@ -177,6 +177,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
         <Button 
           type="reset" 
           variant="outline"
+          className="w-full"
           onClick={() => {
             form.reset();
             onFilterChange({});
