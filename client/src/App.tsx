@@ -45,9 +45,13 @@ function StockApp() {
         return data;
       } catch (error) {
         console.error('Error fetching stocks:', error);
-        return stocks;
+        return stocks; // Return current stocks if API fails
       }
     },
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchInterval: 30000, // Refetch every 30 seconds
+    retry: 3,
+    retryDelay: 1000,
   });
 
   // Update local state when query data changes
@@ -55,10 +59,10 @@ function StockApp() {
     if (stocksData) {
       const sortedStocks = [...stocksData].sort((a, b) => {
         const [field, order] = filters.sort.split(':');
-        let aVal = a[field as keyof Stock] ?? 0;
-        let bVal = b[field as keyof Stock] ?? 0;
+        let aVal = a[field as keyof Stock];
+        let bVal = b[field as keyof Stock];
 
-        // Handle string comparisons
+        // Handle string comparisons (symbol, name, industry)
         if (typeof aVal === 'string' && typeof bVal === 'string') {
           aVal = aVal.toLowerCase();
           bVal = bVal.toLowerCase();
@@ -70,6 +74,17 @@ function StockApp() {
         // Handle numeric comparisons with null/undefined values
         aVal = Number(aVal) || 0;
         bVal = Number(bVal) || 0;
+
+        // Special handling for certain fields
+        if (field === 'changePercent' || field === 'volume' || field === 'marketCap') {
+          // Sort by absolute value for percentage changes
+          if (field === 'changePercent' && order === 'desc') {
+            return Math.abs(bVal) - Math.abs(aVal);
+          }
+          // Regular numeric sort for other fields
+          return order === 'desc' ? bVal - aVal : aVal - bVal;
+        }
+
         return order === 'desc' ? bVal - aVal : aVal - bVal;
       });
 

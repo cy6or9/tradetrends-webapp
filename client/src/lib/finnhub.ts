@@ -23,10 +23,10 @@ class StockCache {
   updateStock(symbol: string, stockData: Stock) {
     const existingData = this.cache.get(symbol);
 
-    // Always keep historical data if current data is missing
+    // Merge with existing data, preserving historical values
     const mergedData: Stock = {
       ...stockData,
-      price: stockData.price || existingData?.data.price || 0,
+      price: (stockData.price && stockData.price > 0) ? stockData.price : (existingData?.data.price || 0),
       marketCap: stockData.marketCap || existingData?.data.marketCap || 0,
       high52Week: stockData.high52Week || existingData?.data.high52Week || 0,
       low52Week: stockData.low52Week || existingData?.data.low52Week || 0,
@@ -40,7 +40,7 @@ class StockCache {
 
     this.cache.set(symbol, {
       symbol,
-      lastPrice: stockData.price || existingData?.lastPrice || 0,
+      lastPrice: mergedData.price,
       lastUpdate: new Date().toISOString(),
       data: mergedData
     });
@@ -52,7 +52,9 @@ class StockCache {
   }
 
   getAllStocks(): Stock[] {
-    return Array.from(this.cache.values()).map(cached => cached.data);
+    return Array.from(this.cache.values())
+      .map(cached => cached.data)
+      .filter(stock => stock !== null);
   }
 
   clear() {
@@ -384,6 +386,7 @@ export async function getStockNews(symbol: string): Promise<StockNews[]> {
     return [];
   }
 }
+
 
 
 function getFinnhubApiKey(): string {
