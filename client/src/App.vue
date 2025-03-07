@@ -1,21 +1,16 @@
 <template>
   <div class="app">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-      <div class="container">
-        <router-link class="navbar-brand" to="/">Stock Market Analysis</router-link>
-      </div>
-    </nav>
-
     <div class="container py-4">
-      <h1>Welcome to Stock Market Analysis</h1>
-      <p>Loading components...</p>
+      <h1 class="text-center mb-4">Stock Market Analysis</h1>
+      <p class="text-center text-muted">{{ message }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Minimal setup to verify Vue 3 is working
-console.log('App component loaded');
+import { ref } from 'vue';
+
+const message = ref('Vue 3 app loaded successfully!');
 </script>
 
 <style>
