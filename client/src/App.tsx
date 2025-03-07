@@ -15,6 +15,15 @@ const queryClient = new QueryClient({
   },
 });
 
+// Create a separate error boundary for WebSocket-related content
+function WebSocketFallback({ error }: { error?: Error }) {
+  return (
+    <div className="text-sm text-muted-foreground p-2">
+      Real-time updates unavailable: {error?.message || "Connection failed"}
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
