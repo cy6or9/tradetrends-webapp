@@ -4,6 +4,8 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertStockSchema, insertFavoriteSchema } from "@shared/schema";
 import { ZodError } from "zod";
+import crypto from 'crypto';
+import express from 'express';
 
 // Store connected clients
 const clients = new Set<WebSocket>();
@@ -21,49 +23,30 @@ function heartbeat(ws: WebSocket) {
   }
 }
 
-// Mock function to simulate real-time stock updates
-function startStockUpdates(wss: WebSocketServer) {
-  setInterval(() => {
-    testStocks.forEach(symbol => {
-      // Base prices for test stocks
-      const basePrices: { [key: string]: number } = {
-        'AAPL': 175,
-        'MSFT': 285,
-        'GOOGL': 134,
-        'AMZN': 175,
-        'META': 485
-      };
+// Broadcast stock update to all connected clients
+function broadcastStockUpdate(update: any) {
+  const message = {
+    type: 'stockUpdate',
+    data: {
+      symbol: update.symbol,
+      price: update.data?.p || update.data?.price,
+      change: update.data?.price_change || 0,
+      timestamp: new Date().toISOString()
+    }
+  };
 
-      const basePrice = basePrices[symbol] || 100;
-      const change = (Math.random() * 2 - 1); // Random change between -1 and 1
-      const price = basePrice + change;
-      const changePercent = (change / basePrice) * 100;
-
-      const mockUpdate = {
-        type: 'stockUpdate',
-        data: {
-          symbol,
-          price,
-          change: changePercent,
-          timestamp: new Date().toISOString()
-        }
-      };
-
-      // Broadcast to all connected clients
-      for (const client of clients) {
-        if (client.readyState === WebSocket.OPEN) {
-          try {
-            client.send(JSON.stringify(mockUpdate));
-          } catch (error) {
-            console.error(`Failed to send update to client: ${error}`);
-            clients.delete(client);
-          }
-        } else if (client.readyState !== WebSocket.CONNECTING) {
-          clients.delete(client);
-        }
+  for (const client of clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(JSON.stringify(message));
+      } catch (error) {
+        console.error(`Failed to send update to client: ${error}`);
+        clients.delete(client);
       }
-    });
-  }, 2000); // Update every 2 seconds
+    } else if (client.readyState !== WebSocket.CONNECTING) {
+      clients.delete(client);
+    }
+  }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -136,8 +119,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }, HEARTBEAT_INTERVAL);
 
-  // Start sending mock updates
-  startStockUpdates(wss);
+  // Finnhub Webhook endpoint
+  app.post("/webhook", express.json(), (req, res) => {
+    const signature = req.headers['x-finnhub-webhook-signature'];
+    const expectedSecret = process.env.EXPECTED_WEBHOOK_SECRET;
+
+    if (!signature || !expectedSecret) {
+      console.error('Missing webhook signature or secret');
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Verify webhook signature
+    const computedSignature = crypto
+      .createHmac('sha256', expectedSecret)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
+
+    if (signature !== computedSignature) {
+      console.error('Invalid webhook signature');
+      return res.status(401).json({ message: 'Invalid signature' });
+    }
+
+    // Process and broadcast the update
+    try {
+      console.log('Received Finnhub webhook:', req.body);
+      broadcastStockUpdate(req.body);
+      res.status(200).json({ message: 'Update processed' });
+    } catch (error) {
+      console.error('Error processing webhook:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
 
   // Rest of your routes...
   app.get("/api/stocks", async (req, res) => {

@@ -1,50 +1,52 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useNotifications } from "./hooks/useNotifications";
 import { MarketTabs } from "./components/MarketTabs";
-import { getStockQuote } from "./lib/finnhub";
-import { getAllUsStocks } from "./lib/finnhub";
-import { stockCache } from "./lib/stockCache";
-
-interface Stock {
-  id: string;
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume: number;
-  marketCap: number;
-  analystRating: number;
-  lastUpdate?: string;
-  isFavorite?: boolean;
-}
+import { getAllUsStocks, type Stock, stockCache } from "./lib/finnhub";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30000, // Consider data fresh for 30 seconds
-      refetchInterval: 30000, // Refetch every 30 seconds
+      staleTime: 60000, // Data considered fresh for 1 minute
+      refetchInterval: 60000, // Refetch every minute
+      retry: 2, // Retry failed requests twice
     },
   },
 });
 
 function StockApp() {
   const [stocks, setStocks] = useState<Stock[]>([]);
-  const [loading, setLoading] = useState(true);
   const { isConnected, lastMessage } = useWebSocket();
   const { permissionGranted, sendNotification } = useNotifications();
 
   // Fetch all US stocks
-  const { data: stocksData, isLoading } = useQuery({
+  const { data: stocksData, isLoading, error } = useQuery({
     queryKey: ['stocks'],
     queryFn: getAllUsStocks,
-    onSuccess: (data) => {
-      setStocks(data);
-      setLoading(false);
-    }
   });
+
+  // Update local state when query data changes
+  useEffect(() => {
+    if (stocksData) {
+      setStocks(stocksData);
+    }
+  }, [stocksData]);
+
+  // Memoize notification handling
+  const handlePriceAlert = useCallback((stock: Stock, price: number, changePercent: number) => {
+    if (permissionGranted && stock.isFavorite && Math.abs(changePercent) >= 1) {
+      sendNotification(
+        `${stock.symbol} Alert!`,
+        {
+          body: `Price ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent).toFixed(2)}% to $${price.toFixed(2)}`,
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          tag: stock.symbol
+        }
+      );
+    }
+  }, [permissionGranted, sendNotification]);
 
   // Handle real-time updates
   useEffect(() => {
@@ -53,46 +55,39 @@ function StockApp() {
 
     const update = lastMessage.data;
 
-    // Update cache with new price
-    stockCache.updateStock(update.symbol, update.price);
+    setStocks(prevStocks => {
+      const newStocks = [...prevStocks];
+      const stockIndex = newStocks.findIndex(s => s.symbol === update.symbol);
 
-    setStocks(prevStocks =>
-      prevStocks.map(stock => {
-        if (stock.symbol === update.symbol) {
-          const changePercent = ((update.price - stock.price) / stock.price) * 100;
+      if (stockIndex === -1) return prevStocks;
 
-          // Send notification for favorite stocks with significant changes
-          if (stock.isFavorite && Math.abs(changePercent) >= 1 && permissionGranted) {
-            sendNotification(
-              `${stock.symbol} Alert!`,
-              {
-                body: `Price ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent).toFixed(2)}% to $${update.price.toFixed(2)}`,
-                icon: '/favicon.ico',
-                badge: '/favicon.ico',
-                tag: stock.symbol
-              }
-            );
-          }
+      const stock = newStocks[stockIndex];
+      const changePercent = ((update.price - stock.price) / stock.price) * 100;
 
-          return {
-            ...stock,
-            price: update.price,
-            change: update.change,
-            changePercent,
-            lastUpdate: update.timestamp
-          };
-        }
-        return stock;
-      })
-    );
-  }, [lastMessage]); // Only depend on lastMessage
+      // Update cache
+      stockCache.updateStock(update.symbol, update.price);
 
-  const toggleFavorite = async (stockId: string) => {
+      // Send notification if needed
+      handlePriceAlert(stock, update.price, changePercent);
+
+      // Update stock data
+      newStocks[stockIndex] = {
+        ...stock,
+        price: update.price,
+        change: update.change,
+        changePercent,
+        lastUpdate: update.timestamp
+      };
+
+      return newStocks;
+    });
+  }, [lastMessage, handlePriceAlert]); // Only depend on lastMessage and memoized handler
+
+  const toggleFavorite = useCallback(async (stockId: string) => {
     if (!permissionGranted) {
       const confirmed = window.confirm(
         "To receive alerts when your favorite stocks have significant price changes, we need your permission to send notifications. Would you like to enable notifications?"
       );
-
       if (confirmed) {
         const granted = await requestPermission();
         if (!granted) {
@@ -109,7 +104,7 @@ function StockApp() {
           : stock
       )
     );
-  };
+  }, [permissionGranted]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -119,7 +114,7 @@ function StockApp() {
             Stock Market <span className="text-primary">Analysis</span>
           </h1>
           <p className="text-lg text-muted-foreground mt-2">
-            Track top-rated stocks with real-time market data
+            Track US stocks ranked by analyst recommendations
           </p>
           <div className="mt-2 flex items-center gap-4">
             <span className={`inline-flex items-center text-sm ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
@@ -135,16 +130,18 @@ function StockApp() {
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
           <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4">Top Rated Stocks</h2>
+            <h2 className="text-2xl font-semibold mb-4">Top Rated US Stocks</h2>
             {isLoading ? (
               <div className="text-center text-muted-foreground">
                 <div className="animate-pulse text-primary">Loading stock data...</div>
               </div>
+            ) : error ? (
+              <div className="text-center text-destructive">
+                <p>Failed to load stocks. Please try again later.</p>
+              </div>
             ) : stocks.length === 0 ? (
-              <div className="text-center space-y-4">
-                <p className="text-muted-foreground">
-                  No stocks found. Please check your API key configuration.
-                </p>
+              <div className="text-center text-muted-foreground">
+                <p>No stocks found. Please check your API configuration.</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -153,6 +150,7 @@ function StockApp() {
                     <div>
                       <h3 className="font-semibold">{stock.symbol}</h3>
                       <p className="text-sm text-muted-foreground">{stock.name}</p>
+                      <p className="text-xs text-muted-foreground">{stock.exchange}</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
