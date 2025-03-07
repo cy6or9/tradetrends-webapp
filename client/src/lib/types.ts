@@ -2,18 +2,21 @@ import { z } from "zod";
 
 // Stock schema
 export const stockSchema = z.object({
-  id: z.number(),
+  id: z.string(),
   symbol: z.string(),
   name: z.string(),
   price: z.number(),
+  change: z.number(),
   changePercent: z.number(),
-  analystRating: z.number(),
   volume: z.number(),
   marketCap: z.number(),
+  beta: z.number(),
+  exchange: z.string(),
+  industry: z.string(),
   sector: z.string(),
-  shortInterest: z.number().optional(),
-  dividendYield: z.number().optional(),
-  earningsDate: z.string().optional(),
+  analystRating: z.number(),
+  isFavorite: z.boolean().optional(),
+  lastUpdate: z.string().optional(),
 });
 
 export type Stock = z.infer<typeof stockSchema>;

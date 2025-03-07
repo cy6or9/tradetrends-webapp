@@ -12,13 +12,16 @@ window.addEventListener('unhandledrejection', event => {
   console.error('Unhandled promise rejection:', event.reason);
 });
 
-// Minimal test component
-const TestComponent = () => (
-  <div className="min-h-screen bg-background text-foreground p-4">
-    <h1 className="text-2xl font-bold mb-4">Testing React Setup</h1>
-    <p>If you can see this message, React is working correctly.</p>
-  </div>
-);
+// Create query client with reasonable defaults
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 30000,
+    },
+  },
+});
 
 try {
   const rootElement = document.getElementById("root");
@@ -26,29 +29,13 @@ try {
     throw new Error("Failed to find root element");
   }
 
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: 1,
-        refetchOnWindowFocus: false,
-        staleTime: 30000,
-      },
-    },
-  });
-
   // Create root and render
   const root = createRoot(rootElement);
-  root.render(
-    <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <TestComponent />
-      </QueryClientProvider>
-    </React.StrictMode>
-  );
 
-  // If test component renders successfully, load the full app
-  setTimeout(() => {
-    import('./App').then(({ default: App }) => {
+  // Load the full app
+  const renderApp = async () => {
+    try {
+      const { default: App } = await import('./App');
       root.render(
         <React.StrictMode>
           <QueryClientProvider client={queryClient}>
@@ -56,7 +43,7 @@ try {
           </QueryClientProvider>
         </React.StrictMode>
       );
-    }).catch(error => {
+    } catch (error) {
       console.error('Failed to load App:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
       document.body.innerHTML = `
@@ -65,8 +52,10 @@ try {
           <p style="color: #666;">${message}</p>
         </div>
       `;
-    });
-  }, 1000); // Give a second to see if test component renders
+    }
+  };
+
+  renderApp();
 
 } catch (error) {
   console.error("Failed to render app:", error);

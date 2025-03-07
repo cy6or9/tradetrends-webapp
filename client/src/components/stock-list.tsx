@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Star, TrendingUp, TrendingDown } from "lucide-react";
 import type { Stock } from "@shared/schema";
+import { getAllUsStocks } from "@/lib/finnhub";
 
 interface StockListProps {
   filters: {
@@ -28,15 +29,28 @@ interface StockListProps {
 }
 
 export function StockList({ filters }: StockListProps) {
-  const { data: stocks, isLoading } = useQuery<Stock[]>({
-    queryKey: ["/api/stocks"],
+  const { data: stocks, isLoading } = useQuery({
+    queryKey: ["/api/stocks", filters],
+    queryFn: getAllUsStocks,
   });
 
   if (isLoading) {
-    return <div>Loading stocks...</div>;
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        Loading stocks...
+      </div>
+    );
   }
 
-  const filteredStocks = stocks?.filter((stock) => {
+  if (!stocks?.length) {
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        No stocks found matching your criteria.
+      </div>
+    );
+  }
+
+  const filteredStocks = stocks.filter((stock) => {
     if (filters.minPrice && stock.price < filters.minPrice) return false;
     if (filters.maxPrice && stock.price > filters.maxPrice) return false;
     if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
@@ -46,13 +60,24 @@ export function StockList({ filters }: StockListProps) {
     return true;
   });
 
-  if (filters.sortBy) {
-    filteredStocks?.sort((a, b) => {
+  // Type-safe sorting
+  if (filters.sortBy && filters.sortDir) {
+    filteredStocks.sort((a, b) => {
       const aVal = a[filters.sortBy as keyof Stock];
       const bVal = b[filters.sortBy as keyof Stock];
-      return filters.sortDir === "asc" ? 
-        (aVal > bVal ? 1 : -1) : 
-        (aVal < bVal ? 1 : -1);
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return filters.sortDir === "asc" ? aVal - bVal : bVal - aVal;
+      }
+
+      // Handle string comparison
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return filters.sortDir === "asc" 
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      }
+
+      return 0;
     });
   }
 
@@ -72,8 +97,8 @@ export function StockList({ filters }: StockListProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredStocks?.map((stock) => (
-              <TableRow key={stock.id}>
+            {filteredStocks.map((stock) => (
+              <TableRow key={stock.symbol}>
                 <TableCell>
                   <Link href={`/stock/${stock.symbol}`}>
                     <a className="font-medium hover:underline">{stock.symbol}</a>
@@ -88,7 +113,9 @@ export function StockList({ filters }: StockListProps) {
                     ) : (
                       <TrendingDown className="w-4 h-4 text-red-500" />
                     )}
-                    {stock.changePercent.toFixed(2)}%
+                    <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
+                      {stock.changePercent.toFixed(2)}%
+                    </span>
                   </div>
                 </TableCell>
                 <TableCell>

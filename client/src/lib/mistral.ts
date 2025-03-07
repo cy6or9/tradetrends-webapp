@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const mistralApiKey = process.env.VITE_MISTRAL_API_KEY;
+const mistralApiKey = import.meta.env.VITE_MISTRAL_API_KEY;
 
 if (!mistralApiKey) {
   throw new Error("VITE_MISTRAL_API_KEY is required");
