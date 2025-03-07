@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useWebSocket } from "./hooks/useWebSocket";
+import { useNotifications } from "./hooks/useNotifications";
 
 interface Stock {
   id: string;
@@ -13,6 +14,7 @@ interface Stock {
   marketCap: number;
   analystRating: number;
   lastUpdate?: string;
+  isFavorite?: boolean;
 }
 
 const queryClient = new QueryClient();
@@ -28,7 +30,8 @@ const initialStocks: Stock[] = [
     changePercent: 0,
     volume: 55000000,
     marketCap: 2800000000000,
-    analystRating: 92
+    analystRating: 92,
+    isFavorite: false
   },
   {
     id: "2",
@@ -39,14 +42,16 @@ const initialStocks: Stock[] = [
     changePercent: 0,
     volume: 25000000,
     marketCap: 2100000000000,
-    analystRating: 95
+    analystRating: 95,
+    isFavorite: false
   }
 ];
 
 function StockApp() {
   const [stocks, setStocks] = useState<Stock[]>(initialStocks);
-  const [loading, setLoading] = useState(false); // Changed to false since we have initial data
+  const [loading, setLoading] = useState(false);
   const { isConnected, lastMessage } = useWebSocket();
+  const { permissionGranted, requestPermission, sendNotification } = useNotifications();
 
   // Handle real-time updates
   useEffect(() => {
@@ -56,6 +61,18 @@ function StockApp() {
         prevStocks.map(stock => {
           if (stock.symbol === update.symbol) {
             const changePercent = ((update.price - stock.price) / stock.price) * 100;
+
+            // Send notification for favorite stocks with significant changes
+            if (stock.isFavorite && Math.abs(changePercent) >= 1) {
+              sendNotification(
+                `${stock.symbol} Alert!`,
+                {
+                  body: `Price ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent).toFixed(2)}% to $${update.price.toFixed(2)}`,
+                  icon: '/favicon.ico'
+                }
+              );
+            }
+
             return {
               ...stock,
               price: update.price,
@@ -68,7 +85,26 @@ function StockApp() {
         })
       );
     }
-  }, [lastMessage]);
+  }, [lastMessage, sendNotification]);
+
+  const toggleFavorite = async (stockId: string) => {
+    // If notifications aren't enabled, request permission
+    if (!permissionGranted) {
+      const granted = await requestPermission();
+      if (!granted) {
+        alert('Please enable notifications to receive stock alerts');
+        return;
+      }
+    }
+
+    setStocks(prevStocks =>
+      prevStocks.map(stock =>
+        stock.id === stockId
+          ? { ...stock, isFavorite: !stock.isFavorite }
+          : stock
+      )
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -111,11 +147,22 @@ function StockApp() {
                     <h3 className="font-semibold">{stock.symbol}</h3>
                     <p className="text-sm text-muted-foreground">{stock.name}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
-                    <p className={`text-sm ${stock.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {stock.change >= 0 ? '↑' : '↓'} {Math.abs(stock.change)}%
-                    </p>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
+                      <p className={`text-sm ${stock.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {stock.change >= 0 ? '↑' : '↓'} {Math.abs(stock.change)}%
+                      </p>
+                    </div>
+                    <button 
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => toggleFavorite(stock.id)}
+                      title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    >
+                      <span className={`text-xl ${stock.isFavorite ? 'text-primary' : 'text-muted-foreground'}`}>
+                        {stock.isFavorite ? '★' : '☆'}
+                      </span>
+                    </button>
                   </div>
                 </div>
               ))}
