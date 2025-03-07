@@ -1,10 +1,13 @@
 import { z } from "zod";
 
-// Cache manager for all API data
+// Constants
+const CACHE_TTL = 60000; // 1 minute TTL
+const RETRY_DELAY = 2000; // 2 seconds between retries
+
+// Cache manager
 class CacheManager {
   private static instance: CacheManager;
   private cache: Map<string, any>;
-  private readonly CACHE_TTL = 60000; // 1 minute TTL
 
   private constructor() {
     this.cache = new Map();
@@ -18,6 +21,7 @@ class CacheManager {
   }
 
   set(key: string, value: any) {
+    console.log(`Caching data for ${key}`);
     this.cache.set(key, {
       data: value,
       timestamp: Date.now()
@@ -27,45 +31,79 @@ class CacheManager {
   get(key: string): any {
     const item = this.cache.get(key);
     if (!item) return null;
-    if (Date.now() - item.timestamp > this.CACHE_TTL) {
+    if (Date.now() - item.timestamp > CACHE_TTL) {
       console.log(`Cache expired for ${key}`);
       return null;
     }
+    console.log(`Cache hit for ${key}`);
     return item.data;
   }
 
   getAll(): any[] {
     return Array.from(this.cache.values())
-      .filter(item => Date.now() - item.timestamp <= this.CACHE_TTL)
+      .filter(item => Date.now() - item.timestamp <= CACHE_TTL)
       .map(item => item.data);
   }
 }
 
 const cacheManager = CacheManager.getInstance();
 
+// Utility function for API requests
+async function makeRequest(endpoint: string, retries = 3): Promise<any> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      console.log(`Requesting ${endpoint} (attempt ${i + 1}/${retries})`);
+      const response = await fetch(endpoint);
+
+      if (!response.ok) {
+        console.error(`Request failed: ${response.status} ${response.statusText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`Got response for ${endpoint}`);
+      return data;
+    } catch (error) {
+      console.error(`Request failed: ${error}`);
+      if (i < retries - 1) {
+        const delay = RETRY_DELAY * Math.pow(2, i);
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw new Error(`Failed after ${retries} retries`);
+}
+
 // API Functions
 export async function getAllUsStocks(): Promise<Stock[]> {
   try {
     console.log('Fetching US stocks...');
-
-    // Check cache first
-    const cachedStocks = cacheManager.getAll();
-    if (cachedStocks.length > 0) {
-      console.log(`Using ${cachedStocks.length} cached stocks`);
-      return cachedStocks;
-    }
-
     const response = await fetch('/api/stocks/search');
+
     if (!response.ok) {
+      console.error(`Failed to fetch stocks: ${response.status}`);
+      const cachedStocks = cacheManager.getAll();
+      if (cachedStocks.length > 0) {
+        console.log(`Using ${cachedStocks.length} cached stocks`);
+        return cachedStocks;
+      }
       throw new Error(`Failed to fetch stocks: ${response.status}`);
     }
 
     const data = await response.json();
     console.log(`Fetched ${data.length} stocks`);
 
-    // Cache each stock individually
+    if (!Array.isArray(data)) {
+      console.error('Invalid response format');
+      return [];
+    }
+
+    // Cache successful responses
     data.forEach((stock: Stock) => {
-      cacheManager.set(`stock_${stock.symbol}`, stock);
+      if (stock && stock.symbol) {
+        cacheManager.set(`stock_${stock.symbol}`, stock);
+      }
     });
 
     return data;
@@ -75,52 +113,9 @@ export async function getAllUsStocks(): Promise<Stock[]> {
   }
 }
 
-export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null> {
-  try {
-    console.log(`Fetching crypto quote for ${symbol}...`);
-
-    // Check cache first
-    const cachedQuote = cacheManager.get(`crypto_${symbol}`);
-    if (cachedQuote) {
-      console.log(`Using cached data for ${symbol}`);
-      return cachedQuote;
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    const oneDayAgo = now - 86400;
-
-    const response = await fetch(
-      `/api/finnhub/crypto/candle?symbol=BINANCE:${symbol}USDT&resolution=D&from=${oneDayAgo}&to=${now}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch crypto data: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (!data || data.s === 'no_data' || !Array.isArray(data.c) || data.c.length === 0) {
-      return null;
-    }
-
-    const quote: CryptoQuote = {
-      c: data.c[data.c.length - 1],
-      h: Math.max(...data.h),
-      l: Math.min(...data.l),
-      o: data.o[0],
-      pc: data.o[0],
-      t: data.t[data.t.length - 1]
-    };
-
-    cacheManager.set(`crypto_${symbol}`, quote);
-    return quote;
-  } catch (error) {
-    console.error(`Error fetching crypto quote for ${symbol}:`, error);
-    return cacheManager.get(`crypto_${symbol}`);
-  }
-}
-
 export async function getIpoCalendar(): Promise<IpoEvent[]> {
   try {
+    console.log('Fetching IPO calendar...');
     const cachedData = cacheManager.get('ipo_calendar');
     if (cachedData) {
       console.log('Using cached IPO calendar');
@@ -133,18 +128,25 @@ export async function getIpoCalendar(): Promise<IpoEvent[]> {
     }
 
     const data = await response.json();
-    const ipoEvents = data.ipoCalendar || [];
+    if (!Array.isArray(data)) {
+      console.warn('Invalid IPO calendar format');
+      return [];
+    }
 
-    cacheManager.set('ipo_calendar', ipoEvents);
-    return ipoEvents;
+    console.log(`Fetched ${data.length} IPO events`);
+    cacheManager.set('ipo_calendar', data);
+    return data;
+
   } catch (error) {
     console.error('Error fetching IPO calendar:', error);
-    return cacheManager.get('ipo_calendar') || [];
+    // Return empty array instead of null to prevent UI errors
+    return [];
   }
 }
 
 export async function getSpacList(): Promise<Spac[]> {
   try {
+    console.log('Fetching SPAC list...');
     const cachedData = cacheManager.get('spac_list');
     if (cachedData) {
       console.log('Using cached SPAC list');
@@ -157,6 +159,12 @@ export async function getSpacList(): Promise<Spac[]> {
     }
 
     const symbols = await response.json();
+    if (!Array.isArray(symbols)) {
+      throw new Error('Invalid symbols response format');
+    }
+
+    console.log(`Processing ${symbols.length} symbols for SPACs`);
+
     const spacs = await Promise.all(
       symbols
         .filter((s: any) =>
@@ -164,9 +172,14 @@ export async function getSpacList(): Promise<Spac[]> {
           s.description?.toLowerCase().includes('spac') ||
           s.description?.toLowerCase().includes('acquisition')
         )
+        .slice(0, 50) // Limit to 50 SPACs to avoid rate limits
         .map(async (spac: any) => {
           try {
-            const profile = await fetch(`/api/finnhub/stock/profile2?symbol=${spac.symbol}`).then(res => res.json());
+            const response = await fetch(`/api/finnhub/stock/profile2?symbol=${spac.symbol}`);
+            if (!response.ok) {
+              throw new Error(`Failed to fetch SPAC profile: ${response.status}`);
+            }
+            const profile = await response.json();
             return {
               symbol: spac.symbol,
               name: profile.name || spac.description,
@@ -182,7 +195,12 @@ export async function getSpacList(): Promise<Spac[]> {
     );
 
     const validSpacs = spacs.filter((s): s is Spac => s !== null);
-    cacheManager.set('spac_list', validSpacs);
+    console.log(`Found ${validSpacs.length} valid SPACs`);
+
+    if (validSpacs.length > 0) {
+      cacheManager.set('spac_list', validSpacs);
+    }
+
     return validSpacs;
   } catch (error) {
     console.error('Error fetching SPAC list:', error);
@@ -206,15 +224,6 @@ export interface Stock {
   isFavorite?: boolean;
   lastUpdate?: string;
 }
-
-export type CryptoQuote = {
-  c: number; // Current price
-  h: number; // High price
-  l: number; // Low price
-  o: number; // Open price
-  pc: number; // Previous close price
-  t: number; // Timestamp
-};
 
 export type IpoEvent = {
   symbol: string;
@@ -260,45 +269,6 @@ export type StockQuote = z.infer<typeof stockQuoteSchema>;
 
 
 const stockNewsSchema = z.object({});
-
-export async function getStockNews(symbol: string): Promise<StockNews[]> {
-  const apiKey = getFinnhubApiKey();
-  if (!apiKey) return [];
-
-  try {
-    const to = new Date();
-    const from = new Date();
-    from.setDate(from.getDate() - 7);
-
-    const response = await fetch(
-      `https://finnhub.io/api/v1/company-news?symbol=${symbol}` +
-      `&from=${from.toISOString().split('T')[0]}` +
-      `&to=${to.toISOString().split('T')[0]}` +
-      `&token=${apiKey}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch news for ${symbol}`);
-    }
-
-    const data = await response.json();
-    return z.array(stockNewsSchema).parse(data);
-  } catch (error) {
-    console.error('Error fetching stock news:', error);
-    return [];
-  }
-}
-
-
-
-function getFinnhubApiKey(): string {
-  const apiKey = import.meta.env.VITE_FINNHUB_API_KEY;
-  if (!apiKey) {
-    console.warn('Finnhub API key not found. Some features may not work.');
-    return '';
-  }
-  return apiKey;
-}
 
 const stockSymbolSchema = z.object({
   currency: z.string(),
@@ -351,3 +321,12 @@ export type StockNews = {
   summary: string;
   url: string;
 };
+
+function getFinnhubApiKey(): string {
+  const apiKey = import.meta.env.VITE_FINNHUB_API_KEY;
+  if (!apiKey) {
+    console.warn('Finnhub API key not found. Some features may not work.');
+    return '';
+  }
+  return apiKey;
+}
