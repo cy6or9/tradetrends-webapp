@@ -271,6 +271,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     proxyFinnhubRequest(`/stock/profile2?symbol=${symbol}`, res);
   });
 
+  app.get("/api/finnhub/crypto/candle", async (req: any, res: any) => {
+    const { symbol, resolution } = req.query;
+    if (!symbol || !resolution) {
+      return res.status(400).json({ error: 'Missing parameters' });
+    }
+
+    try {
+      const to = Math.floor(Date.now() / 1000);
+      const from = to - 86400; // 24 hours ago
+
+      log(`Fetching crypto candles for ${symbol}`, 'api');
+      const data = await finnhubRequest(`/crypto/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}`);
+
+      // Quick acknowledgment
+      res.status(200);
+
+      if (!data || data.s === 'no_data' || !Array.isArray(data.c)) {
+        log(`No data available for ${symbol}`, 'api');
+        return res.json({ s: 'no_data' });
+      }
+
+      log(`Got crypto data for ${symbol}`, 'api');
+      res.json(data);
+    } catch (error) {
+      log(`Crypto data error: ${error}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch crypto data' });
+    }
+  });
+
   async function proxyFinnhubRequest(endpoint: string, res: any) {
     try {
       const data = await finnhubRequest(endpoint);
