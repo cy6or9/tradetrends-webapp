@@ -34,6 +34,43 @@ const cryptoQuoteSchema = z.object({
   t: z.number(), // Timestamp
 });
 
+const API_BASE_URL = 'https://finnhub.io/api/v1';
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<any> {
+  try {
+    const response = await fetch(url);
+
+    if (response.status === 429) { // Rate limit exceeded
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchWithRetry(url, retries - 1);
+      }
+      throw new Error('Rate limit exceeded');
+    }
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // Check for API-specific error responses
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    return data;
+  } catch (error) {
+    if (retries > 0 && error instanceof Error && !error.message.includes('Rate limit')) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return fetchWithRetry(url, retries - 1);
+    }
+    throw error;
+  }
+}
+
 // Add request queue for rate limiting
 const requestQueue: Promise<any>[] = [];
 const MAX_CONCURRENT_REQUESTS = 3;
@@ -130,7 +167,7 @@ export async function getIpoCalendar(): Promise<IpoEvent[]> {
 }
 
 export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null> {
-  const apiKey = getFinnhubApiKey();
+  const apiKey = import.meta.env.VITE_FINNHUB_API_KEY;
   if (!apiKey) {
     console.warn('Finnhub API key not found');
     return null;
@@ -140,12 +177,15 @@ export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null
     const now = Math.floor(Date.now() / 1000);
     const oneDayAgo = now - 86400;
 
-    const data = await makeRequest(
-      `https://finnhub.io/api/v1/crypto/candle?symbol=BINANCE:${symbol}USDT&resolution=D&from=${oneDayAgo}&to=${now}&token=${apiKey}`
-    );
+    const url = `${API_BASE_URL}/crypto/candle?symbol=BINANCE:${symbol}USDT&resolution=D&from=${oneDayAgo}&to=${now}&token=${apiKey}`;
+    const data = await fetchWithRetry(url);
 
     if (!data.s || data.s === 'no_data') {
-      throw new Error('No data available');
+      throw new Error(`No data available for ${symbol}`);
+    }
+
+    if (!data.c || data.c.length === 0) {
+      throw new Error(`Invalid data format for ${symbol}`);
     }
 
     return cryptoQuoteSchema.parse({
