@@ -12,7 +12,8 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 60000, // Data considered fresh for 1 minute
       refetchInterval: 60000, // Refetch every minute
-      retry: 2,
+      retry: 3,
+      retryDelay: 1000,
     },
   },
 });
@@ -22,7 +23,7 @@ function StockApp() {
   const [filters, setFilters] = useState<FilterOptions>({
     query: '',
     exchange: '',
-    sort: 'marketCap:desc' // Default sort by market cap
+    sort: 'symbol:asc'
   });
 
   const { isConnected, lastMessage } = useWebSocket();
@@ -32,22 +33,50 @@ function StockApp() {
   const { data: stocksData, isLoading, error } = useQuery({
     queryKey: ['stocks', filters],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      for (const [key, value] of Object.entries(filters)) {
-        if (value) params.append(key, value.toString());
+      try {
+        const params = new URLSearchParams();
+        for (const [key, value] of Object.entries(filters)) {
+          if (value) params.append(key, value.toString());
+        }
+        const response = await fetch(`/api/stocks/search?${params}`);
+        if (!response.ok) throw new Error('Failed to fetch stocks');
+        const data = await response.json();
+        console.log(`Fetched ${data.length} stocks`);
+        return data;
+      } catch (error) {
+        console.error('Error fetching stocks:', error);
+        return stocks;
       }
-      const response = await fetch(`/api/stocks/search?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch stocks');
-      return response.json();
     },
   });
 
   // Update local state when query data changes
   useEffect(() => {
     if (stocksData) {
-      setStocks(stocksData);
+      const sortedStocks = [...stocksData].sort((a, b) => {
+        const [field, order] = filters.sort.split(':');
+        let aVal = a[field as keyof Stock] ?? 0;
+        let bVal = b[field as keyof Stock] ?? 0;
+
+        // Handle string comparisons
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+          return order === 'desc' ? 
+            bVal.localeCompare(aVal) : 
+            aVal.localeCompare(bVal);
+        }
+
+        // Handle numeric comparisons with null/undefined values
+        aVal = Number(aVal) || 0;
+        bVal = Number(bVal) || 0;
+        return order === 'desc' ? bVal - aVal : aVal - bVal;
+      });
+
+      setStocks(sortedStocks);
+      console.log(`Displaying ${sortedStocks.length} stocks`);
     }
-  }, [stocksData]);
+  }, [stocksData, filters.sort]);
 
   // Handle real-time updates
   useEffect(() => {
