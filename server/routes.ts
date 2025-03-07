@@ -10,18 +10,10 @@ import express from 'express';
 // Store connected clients
 const clients = new Set<WebSocket>();
 
-// Test stocks for real-time updates
-const testStocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'];
-
-// Heartbeat interval (30 seconds)
-const HEARTBEAT_INTERVAL = 30000;
-
-// Send ping to keep connection alive
-function heartbeat(ws: WebSocket) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.ping();
-  }
-}
+// Finnhub API configuration
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY || process.env.VITE_FINNHUB_API_KEY;
+const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
+const RATE_LIMIT_DELAY = 250; // ms between requests
 
 // Broadcast stock update to all connected clients
 function broadcastStockUpdate(update: any) {
@@ -49,60 +41,83 @@ function broadcastStockUpdate(update: any) {
   }
 }
 
+// Proxy middleware for Finnhub API requests
+async function proxyFinnhubRequest(endpoint: string, req: express.Request, res: express.Response) {
+  if (!FINNHUB_API_KEY) {
+    console.error('Finnhub API key not configured');
+    return res.status(500).json({ error: 'Finnhub API key not configured' });
+  }
+
+  try {
+    const url = `${FINNHUB_API_URL}${endpoint}`;
+    const fullUrl = url.includes('?') ? `${url}&token=${FINNHUB_API_KEY}` : `${url}?token=${FINNHUB_API_KEY}`;
+
+    console.log(`Proxying request to: ${endpoint}`);
+
+    const response = await fetch(fullUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Finnhub-Token': FINNHUB_API_KEY
+      }
+    });
+
+    console.log(`Finnhub response status: ${response.status}`);
+
+    if (response.status === 429) {
+      console.log('Rate limit hit, retrying after delay...');
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      return proxyFinnhubRequest(endpoint, req, res);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Finnhub API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log(`Successfully received data for ${endpoint}`);
+    res.json(data);
+  } catch (error) {
+    console.error('Proxy error:', error);
+    res.status(500).json({ error: 'Failed to fetch data from Finnhub' });
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
-  // Create WebSocket server with explicit port
+  // Create WebSocket server
   const wss = new WebSocketServer({ 
     server: httpServer,
     path: '/ws',
     perMessageDeflate: false
   });
 
+  // WebSocket connection handling
   wss.on('connection', (ws: WebSocket) => {
     console.log('Client connected to WebSocket');
     clients.add(ws);
 
     // Set up heartbeat
-    const heartbeatInterval = setInterval(() => heartbeat(ws), HEARTBEAT_INTERVAL);
+    const heartbeatInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      }
+    }, 30000);
 
     // Handle pong responses
     ws.on('pong', () => {
-      ws.isAlive = true;
+      (ws as any).isAlive = true;
     });
 
-    // Send initial data immediately
-    testStocks.forEach(symbol => {
-      const basePrice = symbol === 'AAPL' ? 175 : 285;
-      const initialUpdate = {
-        type: 'stockUpdate',
-        data: {
-          symbol,
-          price: basePrice,
-          change: 0,
-          timestamp: new Date().toISOString()
-        }
-      };
-      ws.send(JSON.stringify(initialUpdate));
-    });
-
-    ws.on('message', (message: string) => {
-      try {
-        const data = JSON.parse(message.toString());
-        console.log('Received:', data);
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
-      }
-    });
-
-    ws.on('close', () => {
-      console.log('Client disconnected from WebSocket');
+    // Handle errors and disconnection
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
       clearInterval(heartbeatInterval);
       clients.delete(ws);
     });
 
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+    ws.on('close', () => {
+      console.log('Client disconnected from WebSocket');
       clearInterval(heartbeatInterval);
       clients.delete(ws);
     });
@@ -111,13 +126,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Cleanup inactive connections
   setInterval(() => {
     wss.clients.forEach((ws: WebSocket) => {
-      if (!ws.isAlive) {
+      const client = ws as any;
+      if (!client.isAlive) {
         clients.delete(ws);
         return ws.terminate();
       }
-      ws.isAlive = false;
+      client.isAlive = false;
     });
-  }, HEARTBEAT_INTERVAL);
+  }, 30000);
 
   // Finnhub Webhook endpoint
   app.post("/webhook", express.json(), (req, res) => {
@@ -151,13 +167,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Rest of your routes...
+  // Finnhub API proxy routes
+  app.get("/api/finnhub/quote", (req, res) => {
+    const symbol = req.query.symbol as string;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol parameter is required' });
+    }
+    proxyFinnhubRequest(`/quote?symbol=${symbol}`, req, res);
+  });
+
+  app.get("/api/finnhub/stock/symbol", (req, res) => {
+    proxyFinnhubRequest('/stock/symbol?exchange=US', req, res);
+  });
+
+  app.get("/api/finnhub/crypto/candle", (req, res) => {
+    const { symbol, resolution, from, to } = req.query;
+    if (!symbol || !resolution || !from || !to) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+    proxyFinnhubRequest(`/crypto/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}`, req, res);
+  });
+
+  app.get("/api/finnhub/stock/recommendation", (req, res) => {
+    const symbol = req.query.symbol as string;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol parameter is required' });
+    }
+    proxyFinnhubRequest(`/stock/recommendation?symbol=${symbol}`, req, res);
+  });
+
+  // Storage routes...
   app.get("/api/stocks", async (req, res) => {
     const stocks = await storage.getStocks();
     res.json(stocks);
   });
 
-  // Get specific stock
   app.get("/api/stocks/:symbol", async (req, res) => {
     const stock = await storage.getStockBySymbol(req.params.symbol);
     if (!stock) {
@@ -167,7 +211,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(stock);
   });
 
-  // Update stock data
   app.put("/api/stocks/:symbol", async (req, res) => {
     try {
       const data = insertStockSchema.parse(req.body);
@@ -182,14 +225,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user's favorites
   app.get("/api/users/:userId/favorites", async (req, res) => {
     const userId = parseInt(req.params.userId);
     const favorites = await storage.getFavorites(userId);
     res.json(favorites);
   });
 
-  // Add favorite
   app.post("/api/users/:userId/favorites", async (req, res) => {
     try {
       const data = insertFavoriteSchema.parse(req.body);
@@ -204,7 +245,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Remove favorite
   app.delete("/api/users/:userId/favorites/:stockId", async (req, res) => {
     const userId = parseInt(req.params.userId);
     const stockId = parseInt(req.params.stockId);
@@ -212,7 +252,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
-  // Update favorite notifications
   app.patch("/api/users/:userId/favorites/:stockId/notify", async (req, res) => {
     const userId = parseInt(req.params.userId);
     const stockId = parseInt(req.params.stockId);

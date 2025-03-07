@@ -21,12 +21,6 @@ const cryptoQuoteSchema = z.object({
   t: z.number(),
 });
 
-// API configuration
-const API_BASE_URL = 'https://finnhub.io/api/v1';
-const US_EXCHANGE_SYMBOLS = ['NYSE', 'NASDAQ'];
-const RATE_LIMIT_DELAY = 250; // ms between requests
-const BATCH_SIZE = 5; // Reduced batch size for better reliability
-
 // Cache manager
 class StockCacheManager {
   private data = new Map<string, { lastPrice: number; analystRating: number; lastUpdate: string }>();
@@ -48,27 +42,13 @@ class StockCacheManager {
 export const stockCache = new StockCacheManager();
 
 // API request handler with retries
-async function fetchFinnhub(endpoint: string, retries = 3): Promise<any> {
-  const apiKey = import.meta.env.VITE_FINNHUB_API_KEY;
-  if (!apiKey) {
-    throw new Error('Finnhub API key not found');
-  }
-
-  const url = `${API_BASE_URL}${endpoint}`;
-  const fullUrl = url.includes('?') ? `${url}&token=${apiKey}` : `${url}?token=${apiKey}`;
-
+async function fetchWithRetries(url: string, retries = 3): Promise<any> {
   try {
-    const response = await fetch(fullUrl, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Finnhub-Token': apiKey
-      }
-    });
+    const response = await fetch(url);
 
     if (response.status === 429 && retries > 0) {
-      console.log(`Rate limit hit, retrying in ${RATE_LIMIT_DELAY}ms...`);
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      return fetchFinnhub(endpoint, retries - 1);
+      await new Promise(resolve => setTimeout(resolve, 250)); // Wait 250ms
+      return fetchWithRetries(url, retries - 1);
     }
 
     if (!response.ok) {
@@ -76,16 +56,12 @@ async function fetchFinnhub(endpoint: string, retries = 3): Promise<any> {
     }
 
     const data = await response.json();
-    if (data.error) {
-      throw new Error(data.error);
-    }
-
     return data;
   } catch (error) {
-    console.error(`Finnhub API error (${endpoint}):`, error);
+    console.error('API request error:', error);
     if (retries > 0) {
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      return fetchFinnhub(endpoint, retries - 1);
+      await new Promise(resolve => setTimeout(resolve, 250));
+      return fetchWithRetries(url, retries - 1);
     }
     throw error;
   }
@@ -109,22 +85,18 @@ export interface Stock {
 export async function getAllUsStocks(): Promise<Stock[]> {
   try {
     console.log('Fetching US stocks...');
+    const symbols = await fetchWithRetries('/api/finnhub/stock/symbol');
 
-    // Fetch all stock symbols
-    const allSymbols = await fetchFinnhub('/stock/symbol?exchange=US');
-    const activeStocks = allSymbols
-      .filter((stock: any) =>
-        US_EXCHANGE_SYMBOLS.includes(stock.exchange) &&
-        stock.type === 'Common Stock'
-      )
+    const activeStocks = symbols
+      .filter((stock: any) => ['NYSE', 'NASDAQ'].includes(stock.exchange) && stock.type === 'Common Stock')
       .slice(0, 200); // Top 200 stocks
 
     console.log(`Processing ${activeStocks.length} stocks...`);
     const stocks: Stock[] = [];
 
     // Process in batches to respect rate limits
-    for (let i = 0; i < activeStocks.length; i += BATCH_SIZE) {
-      const batch = activeStocks.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < activeStocks.length; i += 5) {
+      const batch = activeStocks.slice(i, i + 5);
       const batchPromises = batch.map(async (stock: any) => {
         try {
           // Get cached data if available
@@ -133,7 +105,7 @@ export async function getAllUsStocks(): Promise<Stock[]> {
           // Fetch current quote
           let quote;
           try {
-            quote = await fetchFinnhub(`/quote?symbol=${stock.symbol}`);
+            quote = await fetchWithRetries(`/api/finnhub/quote?symbol=${stock.symbol}`);
           } catch (error) {
             console.warn(`Failed to fetch quote for ${stock.symbol}, using cached data`);
             quote = null;
@@ -145,7 +117,7 @@ export async function getAllUsStocks(): Promise<Stock[]> {
           // Fetch analyst recommendations
           let analystRating = cached?.analystRating ?? 0;
           try {
-            const recommendations = await fetchFinnhub(`/stock/recommendation?symbol=${stock.symbol}`);
+            const recommendations = await fetchWithRetries(`/api/finnhub/stock/recommendation?symbol=${stock.symbol}`);
             if (recommendations && recommendations.length > 0) {
               const latest = recommendations[0];
               const totalRecs = latest.strongBuy + latest.buy + latest.hold + latest.sell + latest.strongSell;
@@ -184,7 +156,7 @@ export async function getAllUsStocks(): Promise<Stock[]> {
       stocks.push(...batchResults.filter((s): s is Stock => s !== null));
 
       // Rate limiting delay between batches
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * BATCH_SIZE));
+      await new Promise(resolve => setTimeout(resolve, 250 * 5));
     }
 
     console.log(`Successfully processed ${stocks.length} stocks`);
@@ -201,22 +173,21 @@ export async function getCryptoQuote(symbol: string): Promise<any> {
     const now = Math.floor(Date.now() / 1000);
     const oneDayAgo = now - 86400;
 
-    const data = await fetchFinnhub(
-      `/crypto/candle?symbol=BINANCE:${symbol}USDT&resolution=D&from=${oneDayAgo}&to=${now}`
+    const data = await fetchWithRetries(
+      `/api/finnhub/crypto/candle?symbol=BINANCE:${symbol}USDT&resolution=D&from=${oneDayAgo}&to=${now}`
     );
 
     if (!data || data.s === 'no_data') {
       throw new Error(`No data available for ${symbol}`);
     }
 
-    // Extract the latest values
     return {
-      c: data.c[data.c.length - 1], // Current price
-      h: Math.max(...data.h), // High price
-      l: Math.min(...data.l), // Low price
-      o: data.o[0], // Open price
-      pc: data.o[0], // Previous close price
-      t: data.t[data.t.length - 1] // Latest timestamp
+      c: data.c[data.c.length - 1],
+      h: Math.max(...data.h),
+      l: Math.min(...data.l),
+      o: data.o[0],
+      pc: data.o[0],
+      t: data.t[data.t.length - 1]
     };
   } catch (error) {
     console.error(`Error fetching crypto quote for ${symbol}:`, error);
@@ -226,6 +197,7 @@ export async function getCryptoQuote(symbol: string): Promise<any> {
 
 export type StockQuote = z.infer<typeof stockQuoteSchema>;
 export type CryptoQuote = z.infer<typeof cryptoQuoteSchema>;
+
 const stockSymbolSchema = z.object({
   currency: z.string(),
   description: z.string(),
@@ -352,24 +324,7 @@ export async function getSpacList(): Promise<Spac[]> {
   ];
 }
 
-async function fetchWithRetries(url: string, retries = 3): Promise<any> {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      if (retries > 0 && response.status === 429) {
-        console.log(`Rate limit hit, retrying in ${RATE_LIMIT_DELAY}ms...`);
-        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-        return fetchWithRetries(url, retries - 1);
-      }
-      throw new Error(`API request failed: ${response.statusText}`);
-    }
-    return await response.json();
-  } catch (error) {
-    if (retries > 0) {
-      console.log(`Request failed, retrying... (${retries} attempts left)`);
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      return fetchWithRetries(url, retries - 1);
-    }
-    throw error;
-  }
-}
+const API_BASE_URL = 'https://finnhub.io/api/v1';
+const US_EXCHANGE_SYMBOLS = ['NYSE', 'NASDAQ'];
+const RATE_LIMIT_DELAY = 250; // ms between requests
+const BATCH_SIZE = 5; // Reduced batch size for better reliability
