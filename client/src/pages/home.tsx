@@ -6,17 +6,24 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { SlidingMenu } from "@/components/sliding-menu";
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Menu, ChevronRight } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Separate component for WebSocket status to isolate potential errors
-function WebSocketStatus() {
+function WebSocketStatus({ stockCount }: { stockCount: number }) {
   const { isConnected } = useWebSocket();
 
   if (import.meta.env.PROD) return null;
 
   return (
-    <div className="text-sm text-muted-foreground">
-      WebSocket Status: {isConnected ? 'Connected' : 'Disconnected'}
+    <div className="flex items-center gap-2">
+      <Badge variant={isConnected ? "success" : "destructive"}>
+        {isConnected ? "Live" : "Connecting..."}
+      </Badge>
+      <span className="text-sm text-muted-foreground">
+        {stockCount} stocks tracked
+      </span>
     </div>
   );
 }
@@ -24,17 +31,19 @@ function WebSocketStatus() {
 export default function Home() {
   const [filters, setFilters] = useState({});
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("stocks");
 
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile menu toggle */}
       <Button
-        variant="ghost"
-        size="icon"
-        className="fixed top-4 left-4 z-50 lg:hidden"
+        variant="outline"
+        size="default"
+        className="fixed top-4 left-4 z-50 lg:hidden flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
         onClick={() => setIsMenuOpen(!isMenuOpen)}
       >
         <Menu className="h-4 w-4" />
+        <ChevronRight className={`h-4 w-4 transition-transform ${isMenuOpen ? "rotate-180" : ""}`} />
       </Button>
 
       {/* Filters in sliding menu */}
@@ -50,17 +59,31 @@ export default function Home() {
         <div className="container p-4 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-4xl font-bold">Stock Market Analysis</CardTitle>
-              <p className="text-muted-foreground">
-                Track stocks with high analyst ratings and market momentum
-              </p>
-              <ErrorBoundary fallback={null}>
-                <WebSocketStatus />
-              </ErrorBoundary>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-4xl font-bold">Stock Market Analysis</CardTitle>
+                  <p className="text-muted-foreground mt-2">
+                    Track stocks with high analyst ratings and market momentum
+                  </p>
+                </div>
+                <ErrorBoundary fallback={null}>
+                  <WebSocketStatus stockCount={50} />
+                </ErrorBoundary>
+              </div>
             </CardHeader>
           </Card>
 
-          <StockList filters={filters} />
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="w-full justify-start">
+              <TabsTrigger value="stocks">Hot Stocks</TabsTrigger>
+              <TabsTrigger value="ipo">IPO Calendar</TabsTrigger>
+              <TabsTrigger value="spacs">SPACs</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {activeTab === "stocks" && <StockList filters={filters} />}
+          {activeTab === "ipo" && <div>IPO Calendar content coming soon...</div>}
+          {activeTab === "spacs" && <div>SPACs content coming soon...</div>}
         </div>
       </div>
     </div>
