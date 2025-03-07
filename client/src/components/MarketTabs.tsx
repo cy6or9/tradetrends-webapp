@@ -61,13 +61,24 @@ export function MarketTabs() {
     retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000)
   });
 
-  // Function to format large numbers
-  const formatNumber = (num: number | undefined) => {
+  // Function to format large numbers with commas
+  const formatFullNumber = (num: number | undefined): string => {
     if (!num) return '0';
-    if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
-    if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
-    if (num >= 1e3) return `${(num / 1e3).toFixed(2)}K`;
-    return num.toString();
+    return num.toLocaleString('en-US');
+  };
+
+  // Function to format currency in billions/millions
+  const formatCurrency = (num: number | undefined): string => {
+    if (!num) return '$0';
+    const billion = 1000000000;
+    const million = 1000000;
+    if (num >= billion) {
+      return `$${(num / billion).toFixed(2)}B`;
+    }
+    if (num >= million) {
+      return `$${(num / million).toFixed(2)}M`;
+    }
+    return `$${num.toLocaleString('en-US')}`;
   };
 
   return (
@@ -108,8 +119,8 @@ export function MarketTabs() {
                       <h3 className="text-lg font-semibold">{stock.symbol}</h3>
                       <p className="text-sm text-muted-foreground">{stock.name}</p>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                        <span>Vol: {formatNumber(stock.volume)}</span>
-                        <span>Cap: ${formatNumber(stock.marketCap)}</span>
+                        <span>Volume: {formatFullNumber(stock.volume)}</span>
+                        <span>Market Cap: {formatCurrency(stock.marketCap)}</span>
                       </div>
                     </div>
                     <div className="text-right">
@@ -148,12 +159,12 @@ export function MarketTabs() {
                       <div className="flex flex-col gap-1 mt-2">
                         {typeof ipo.shares === 'number' && (
                           <p className="text-sm text-muted-foreground">
-                            Shares offered: {formatNumber(ipo.shares)}
+                            Total Shares: {formatFullNumber(ipo.shares)}
                           </p>
                         )}
-                        {typeof ipo.price === 'number' && (
+                        {typeof ipo.price === 'number' && typeof ipo.shares === 'number' && (
                           <p className="text-sm text-muted-foreground">
-                            Total value: ${formatNumber(ipo.shares * ipo.price)}
+                            Expected Value: {formatCurrency(ipo.price * ipo.shares)}
                           </p>
                         )}
                       </div>
@@ -194,13 +205,21 @@ export function MarketTabs() {
                       <h3 className="font-semibold">{spac.name} ({spac.symbol})</h3>
                       <p className="text-sm text-muted-foreground">Status: {spac.status}</p>
                       {spac.targetCompany && (
-                        <p className="text-sm">Target: {spac.targetCompany}</p>
+                        <p className="text-sm mt-1">Target: {spac.targetCompany}</p>
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="font-medium">
-                        Trust: ${(spac.trustValue / 1e6).toFixed(1)}M
-                      </p>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
+                          {spac.exchange}
+                        </span>
+                        <p className="font-medium mt-2">
+                          Trust Value: {formatCurrency(spac.trustValue)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          ({formatFullNumber(spac.trustValue)} USD)
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
