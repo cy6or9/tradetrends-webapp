@@ -4,6 +4,8 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import { useNotifications } from "./hooks/useNotifications";
 import { MarketTabs } from "./components/MarketTabs";
 import { getStockQuote } from "./lib/finnhub";
+import { getAllUsStocks } from "./lib/finnhub";
+import { stockCache } from "./lib/stockCache";
 
 interface Stock {
   id: string;
@@ -19,51 +21,14 @@ interface Stock {
   isFavorite?: boolean;
 }
 
-const queryClient = new QueryClient();
-
-// List of stocks to track
-const TRACKED_STOCKS = [
-  {
-    id: "1",
-    symbol: "AAPL",
-    name: "Apple Inc.",
-    volume: 55000000,
-    marketCap: 2800000000000,
-    analystRating: 92
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30000, // Consider data fresh for 30 seconds
+      refetchInterval: 30000, // Refetch every 30 seconds
+    },
   },
-  {
-    id: "2",
-    symbol: "MSFT",
-    name: "Microsoft Corporation",
-    volume: 25000000,
-    marketCap: 2100000000000,
-    analystRating: 95
-  },
-  {
-    id: "3",
-    symbol: "GOOGL",
-    name: "Alphabet Inc.",
-    volume: 20000000,
-    marketCap: 1900000000000,
-    analystRating: 90
-  },
-  {
-    id: "4",
-    symbol: "AMZN",
-    name: "Amazon.com Inc.",
-    volume: 30000000,
-    marketCap: 1800000000000,
-    analystRating: 88
-  },
-  {
-    id: "5",
-    symbol: "META",
-    name: "Meta Platforms Inc.",
-    volume: 22000000,
-    marketCap: 1200000000000,
-    analystRating: 85
-  }
-];
+});
 
 function StockApp() {
   const [stocks, setStocks] = useState<Stock[]>([]);
@@ -71,33 +36,15 @@ function StockApp() {
   const { isConnected, lastMessage } = useWebSocket();
   const { permissionGranted, sendNotification } = useNotifications();
 
-  // Fetch initial stock data
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      setLoading(true);
-      try {
-        const stocksWithQuotes = await Promise.all(
-          TRACKED_STOCKS.map(async (stock) => {
-            const quote = await getStockQuote(stock.symbol);
-            return {
-              ...stock,
-              price: quote?.c || 0,
-              change: quote?.d || 0,
-              changePercent: quote?.dp || 0,
-              isFavorite: false
-            };
-          })
-        );
-        setStocks(stocksWithQuotes);
-      } catch (error) {
-        console.error('Failed to fetch initial stock data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInitialData();
-  }, []); // Only run once on mount
+  // Fetch all US stocks
+  const { data: stocksData, isLoading } = useQuery({
+    queryKey: ['stocks'],
+    queryFn: getAllUsStocks,
+    onSuccess: (data) => {
+      setStocks(data);
+      setLoading(false);
+    }
+  });
 
   // Handle real-time updates
   useEffect(() => {
@@ -105,7 +52,11 @@ function StockApp() {
     if (lastMessage.type !== 'stockUpdate') return;
 
     const update = lastMessage.data;
-    setStocks(prevStocks => 
+
+    // Update cache with new price
+    stockCache.updateStock(update.symbol, update.price);
+
+    setStocks(prevStocks =>
       prevStocks.map(stock => {
         if (stock.symbol === update.symbol) {
           const changePercent = ((update.price - stock.price) / stock.price) * 100;
@@ -168,14 +119,14 @@ function StockApp() {
             Stock Market <span className="text-primary">Analysis</span>
           </h1>
           <p className="text-lg text-muted-foreground mt-2">
-            Track stocks with high analyst ratings and market momentum
+            Track top-rated stocks with real-time market data
           </p>
           <div className="mt-2 flex items-center gap-4">
             <span className={`inline-flex items-center text-sm ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
               ● {isConnected ? 'Live Updates' : 'Connecting...'}
             </span>
-            <span className={`inline-flex items-center text-sm ${permissionGranted ? 'text-green-500' : 'text-yellow-500'}`}>
-              {permissionGranted ? '🔔 Notifications enabled' : '🔕 Notifications disabled'}
+            <span className="text-sm text-muted-foreground">
+              {stocks.length} stocks tracked
             </span>
           </div>
         </div>
@@ -184,19 +135,16 @@ function StockApp() {
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
           <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4">Stocks</h2>
-            {loading ? (
+            <h2 className="text-2xl font-semibold mb-4">Top Rated Stocks</h2>
+            {isLoading ? (
               <div className="text-center text-muted-foreground">
                 <div className="animate-pulse text-primary">Loading stock data...</div>
               </div>
             ) : stocks.length === 0 ? (
               <div className="text-center space-y-4">
                 <p className="text-muted-foreground">
-                  No stocks found. Add some stocks to track.
+                  No stocks found. Please check your API key configuration.
                 </p>
-                <button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors">
-                  Add Stocks
-                </button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -213,7 +161,11 @@ function StockApp() {
                           {stock.changePercent >= 0 ? '↑' : '↓'} {Math.abs(stock.changePercent).toFixed(2)}%
                         </p>
                       </div>
-                      <button 
+                      <div className="text-right">
+                        <p className="text-sm font-medium">Buy Rating</p>
+                        <p className="text-sm text-primary">{stock.analystRating.toFixed(0)}%</p>
+                      </div>
+                      <button
                         className="hover:bg-accent/50 p-2 rounded-full transition-colors"
                         onClick={() => toggleFavorite(stock.id)}
                         title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}

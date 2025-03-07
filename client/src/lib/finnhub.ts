@@ -232,3 +232,110 @@ function getFinnhubApiKey(): string {
   }
   return apiKey;
 }
+
+
+const US_EXCHANGE_SYMBOLS = ['NYSE', 'NASDAQ'];
+
+interface Stock {
+  id: string;
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  volume: number;
+  marketCap: number;
+  analystRating: number;
+  isFavorite: boolean;
+}
+
+//Simulate a cache - replace with your actual caching mechanism
+const stockCache = {
+  stockData: new Map<string, {lastPrice:number, analystRating:number}>(),
+  getStock: function(symbol:string){
+    return this.stockData.get(symbol);
+  },
+  updateStock: function(symbol:string, price:number, rating:number){
+    this.stockData.set(symbol, {lastPrice: price, analystRating: rating});
+  }
+}
+
+
+export async function getAllUsStocks(): Promise<Stock[]> {
+  const apiKey = import.meta.env.VITE_FINNHUB_API_KEY;
+  if (!apiKey) {
+    console.warn('Finnhub API key not found');
+    return [];
+  }
+
+  try {
+    // Fetch all stock symbols from US exchanges
+    const symbolsUrl = `${API_BASE_URL}/stock/symbol?exchange=US&token=${apiKey}`;
+    const symbolsData = await fetchWithRetry(symbolsUrl);
+
+    // Filter to major exchanges and get active stocks only
+    const activeStocks = symbolsData
+      .filter((stock: any) =>
+        US_EXCHANGE_SYMBOLS.includes(stock.exchange) &&
+        stock.type === 'Common Stock'
+      )
+      .slice(0, 100); // Start with top 100 stocks for performance
+
+    // Get recommendations for each stock
+    const stocksWithRatings = await Promise.all(
+      activeStocks.map(async (stock: any) => {
+        try {
+          const recommendUrl = `${API_BASE_URL}/stock/recommendation?symbol=${stock.symbol}&token=${apiKey}`;
+          const recommendData = await fetchWithRetry(recommendUrl);
+
+          let analystRating = null;
+          if (recommendData && recommendData.length > 0) {
+            const latest = recommendData[0];
+            // Calculate a rating based on buy/strong buy vs sell/strong sell recommendations
+            const totalRecs = latest.strongBuy + latest.buy + latest.hold + latest.sell + latest.strongSell;
+            if (totalRecs > 0) {
+              analystRating = ((latest.strongBuy + latest.buy) / totalRecs) * 100;
+            }
+          }
+
+          // Get current price from cache or API
+          let price = 0;
+          const cachedData = stockCache.getStock(stock.symbol);
+          if (cachedData) {
+            price = cachedData.lastPrice;
+          } else {
+            const quote = await getStockQuote(stock.symbol);
+            price = quote?.c || 0;
+          }
+
+          const stockData = {
+            id: stock.symbol,
+            symbol: stock.symbol,
+            name: stock.description,
+            price,
+            change: 0,
+            changePercent: 0,
+            volume: 0,
+            marketCap: 0,
+            analystRating: analystRating || 0,
+            isFavorite: false
+          };
+
+          // Update cache
+          stockCache.updateStock(stock.symbol, price, analystRating);
+          return stockData;
+        } catch (error) {
+          console.error(`Error fetching data for ${stock.symbol}:`, error);
+          return null;
+        }
+      })
+    );
+
+    return stocksWithRatings
+      .filter((stock): stock is Stock => stock !== null)
+      .sort((a, b) => b.analystRating - a.analystRating);
+  } catch (error) {
+    console.error('Error fetching US stocks:', error);
+    return [];
+  }
+}
