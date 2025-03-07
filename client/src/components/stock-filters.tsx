@@ -91,6 +91,32 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
 
           <FormField
             control={form.control}
+            name="minChangePercent"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Change %</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="-10" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="maxChangePercent"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Change %</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="10" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="minAnalystRating"
             render={({ field }) => (
               <FormItem>
