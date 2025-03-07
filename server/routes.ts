@@ -60,9 +60,8 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
     }
 
     let stocks = await response.json();
-    log(`Fetched ${stocks.length} stocks from Finnhub`, 'search');
 
-    // Apply filters
+    // Filter stocks based on exchange and query
     stocks = stocks.filter((stock: any) => {
       if (exchange && stock.exchange !== exchange) return false;
       if (query && !stock.symbol.includes(query.toString().toUpperCase()) && 
@@ -72,23 +71,24 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
 
     log(`Filtered to ${stocks.length} stocks`, 'search');
 
-    // Get quotes and profiles for filtered stocks
+    // Get quotes and profiles for filtered stocks in parallel
     const quotedStocks = await Promise.all(
-      stocks.slice(0, 100).map(async (stock: any) => {
+      stocks.map(async (stock: any) => {
         try {
           const [quoteRes, profileRes] = await Promise.all([
             fetch(`${FINNHUB_API_URL}/quote?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`),
             fetch(`${FINNHUB_API_URL}/stock/profile2?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`)
           ]);
 
-          const [quote, profile] = await Promise.all([
-            quoteRes.json(),
-            profileRes.json()
-          ]);
+          let quote = { c: 0, d: 0, dp: 0, v: 0 };
+          let profile = { marketCapitalization: 0, industry: 'Unknown', weekHigh52: 0, weekLow52: 0, beta: 0 };
 
-          if (!quoteRes.ok || !profileRes.ok) {
-            log(`Failed to fetch data for ${stock.symbol}`, 'error');
-            return null;
+          if (quoteRes.ok) {
+            quote = await quoteRes.json();
+          }
+
+          if (profileRes.ok) {
+            profile = await profileRes.json();
           }
 
           const stockData = {
@@ -113,7 +113,17 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
           return stockData;
         } catch (error) {
           log(`Error processing ${stock.symbol}: ${error}`, 'error');
-          return null;
+          // Return basic stock info even if we can't get current price data
+          return {
+            ...stock,
+            price: 0,
+            change: 0,
+            changePercent: 0,
+            volume: 0,
+            marketCap: 0,
+            beta: 0,
+            industry: 'Unknown'
+          };
         }
       })
     );
@@ -126,12 +136,26 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
     if (sort) {
       const [field, order] = sort.toString().split(':');
       validStocks.sort((a: any, b: any) => {
-        const aVal = a[field] || 0;
-        const bVal = b[field] || 0;
+        let aVal = a[field];
+        let bVal = b[field];
+
+        // Handle string comparisons
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+          return order === 'desc' ? 
+            bVal.localeCompare(aVal) : 
+            aVal.localeCompare(bVal);
+        }
+
+        // Handle numeric comparisons with null/undefined values
+        aVal = aVal || 0;
+        bVal = bVal || 0;
         return order === 'desc' ? bVal - aVal : aVal - bVal;
       });
     }
 
+    log(`Sending ${validStocks.length} stocks after sorting`, 'search');
     res.json(validStocks);
   } catch (error) {
     log(`Search error: ${error}`, 'error');
