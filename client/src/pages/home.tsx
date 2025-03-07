@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Menu, ChevronRight } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { IpoCalendar } from "@/components/ipo-calendar";
+import { SpacList } from "@/components/spac-list";
 
 // Separate component for WebSocket status to isolate potential errors
 function WebSocketStatus({ stockCount }: { stockCount: number }) {
@@ -106,11 +108,15 @@ export default function Home() {
               </TabsContent>
 
               <TabsContent value="ipo">
-                <div className="mt-4">IPO Calendar content coming soon...</div>
+                <div className="mt-4">
+                  <IpoCalendar />
+                </div>
               </TabsContent>
 
               <TabsContent value="spacs">
-                <div className="mt-4">SPACs content coming soon...</div>
+                <div className="mt-4">
+                  <SpacList />
+                </div>
               </TabsContent>
             </Tabs>
           </div>
