@@ -36,7 +36,7 @@ try {
     },
   });
 
-  // Create root and render test component first
+  // Create root and render
   const root = createRoot(rootElement);
   root.render(
     <React.StrictMode>
@@ -58,7 +58,13 @@ try {
       );
     }).catch(error => {
       console.error('Failed to load App:', error);
-      throw error;
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      document.body.innerHTML = `
+        <div style="padding: 20px; text-align: center; font-family: system-ui, -apple-system, sans-serif;">
+          <h1 style="color: #ef4444; font-size: 24px; margin-bottom: 16px;">Application Error</h1>
+          <p style="color: #666;">${message}</p>
+        </div>
+      `;
     });
   }, 1000); // Give a second to see if test component renders
 
