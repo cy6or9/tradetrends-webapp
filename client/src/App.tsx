@@ -151,10 +151,10 @@ function StockApp() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-foreground">
-                Stock Market <span className="text-primary">Analysis</span>
+                Trade<span className="text-primary">Trends</span>
               </h1>
               <p className="text-lg text-muted-foreground mt-2">
-                Track US stocks with real-time updates and advanced filtering
+                Advanced stock market analysis filtering & trending trade data tracker for better investing
               </p>
             </div>
             <Sheet>
