@@ -17,8 +17,6 @@ interface Stock {
   isFavorite?: boolean;
 }
 
-const queryClient = new QueryClient();
-
 // Initial test data
 const initialStocks: Stock[] = [
   {
@@ -47,6 +45,8 @@ const initialStocks: Stock[] = [
   }
 ];
 
+const queryClient = new QueryClient();
+
 function StockApp() {
   const [stocks, setStocks] = useState<Stock[]>(initialStocks);
   const [loading, setLoading] = useState(false);
@@ -68,7 +68,9 @@ function StockApp() {
                 `${stock.symbol} Alert!`,
                 {
                   body: `Price ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent).toFixed(2)}% to $${update.price.toFixed(2)}`,
-                  icon: '/favicon.ico'
+                  icon: '/favicon.ico',
+                  badge: '/favicon.ico',
+                  tag: stock.symbol // Prevent duplicate notifications for the same stock
                 }
               );
             }
@@ -88,15 +90,32 @@ function StockApp() {
   }, [lastMessage, sendNotification]);
 
   const toggleFavorite = async (stockId: string) => {
-    // If notifications aren't enabled, request permission
     if (!permissionGranted) {
-      const granted = await requestPermission();
-      if (!granted) {
-        alert('Please enable notifications to receive stock alerts');
+      // Show a more user-friendly notification request
+      const confirmed = window.confirm(
+        "To receive alerts when your favorite stocks have significant price changes, we need your permission to send notifications. Would you like to enable notifications?"
+      );
+
+      if (confirmed) {
+        const granted = await requestPermission();
+        if (!granted) {
+          alert('Please enable notifications in your browser settings to receive stock alerts');
+          return;
+        }
+      } else {
+        // User declined notification permission but still allow favoriting
+        setStocks(prevStocks =>
+          prevStocks.map(stock =>
+            stock.id === stockId
+              ? { ...stock, isFavorite: !stock.isFavorite }
+              : stock
+          )
+        );
         return;
       }
     }
 
+    // Toggle favorite status
     setStocks(prevStocks =>
       prevStocks.map(stock =>
         stock.id === stockId
@@ -116,9 +135,12 @@ function StockApp() {
           <p className="text-lg text-muted-foreground mt-2">
             Track stocks with high analyst ratings and market momentum
           </p>
-          <div className="mt-2">
+          <div className="mt-2 flex items-center gap-4">
             <span className={`inline-flex items-center text-sm ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
               ● {isConnected ? 'Live Updates' : 'Connecting...'}
+            </span>
+            <span className={`inline-flex items-center text-sm ${permissionGranted ? 'text-green-500' : 'text-yellow-500'}`}>
+              {permissionGranted ? '🔔 Notifications enabled' : '🔕 Notifications disabled'}
             </span>
           </div>
         </div>
@@ -155,7 +177,7 @@ function StockApp() {
                       </p>
                     </div>
                     <button 
-                      className="btn btn-sm btn-outline-primary"
+                      className="hover:bg-accent/50 p-2 rounded-full transition-colors"
                       onClick={() => toggleFavorite(stock.id)}
                       title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                     >
