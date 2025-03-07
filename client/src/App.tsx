@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useNotifications } from "./hooks/useNotifications";
 import { MarketTabs } from "./components/MarketTabs";
 import { StockFilters, type FilterOptions } from "./components/StockFilters";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import type { Stock } from "./lib/finnhub";
 
 const queryClient = new QueryClient({
@@ -21,7 +22,7 @@ function StockApp() {
   const [filters, setFilters] = useState<FilterOptions>({
     query: '',
     exchange: '',
-    sort: 'symbol:asc'
+    sort: 'marketCap:desc' // Default sort by market cap
   });
 
   const { isConnected, lastMessage } = useWebSocket();
@@ -31,10 +32,10 @@ function StockApp() {
   const { data: stocksData, isLoading, error } = useQuery({
     queryKey: ['stocks', filters],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        ...filters,
-        query: filters.query || ''
-      });
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(filters)) {
+        if (value) params.append(key, value.toString());
+      }
       const response = await fetch(`/api/stocks/search?${params}`);
       if (!response.ok) throw new Error('Failed to fetch stocks');
       return response.json();
@@ -122,7 +123,9 @@ function StockApp() {
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
           <div className="grid gap-8 md:grid-cols-[300px,1fr]">
-            <StockFilters onFilterChange={setFilters} />
+            <ErrorBoundary>
+              <StockFilters onFilterChange={setFilters} />
+            </ErrorBoundary>
 
             <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
               <h2 className="text-2xl font-semibold mb-4">Stock List</h2>
@@ -141,28 +144,52 @@ function StockApp() {
               ) : (
                 <div className="space-y-4">
                   {stocks.map(stock => (
-                    <div key={stock.symbol} className="flex items-center justify-between p-4 border border-border/40 rounded-md">
-                      <div>
-                        <h3 className="font-semibold">{stock.symbol}</h3>
-                        <p className="text-sm text-muted-foreground">{stock.name}</p>
-                        <p className="text-xs text-muted-foreground">{stock.exchange}</p>
-                      </div>
-                      <div className="flex items-center gap-4">
+                    <div key={stock.symbol} className="p-4 border border-border/40 rounded-md hover:bg-accent/5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold">{stock.symbol}</h3>
+                            <button
+                              className="hover:bg-accent/50 p-1 rounded-full transition-colors"
+                              onClick={() => toggleFavorite(stock.id)}
+                              title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                            >
+                              <span className={`text-xl ${stock.isFavorite ? 'text-primary' : 'text-muted-foreground'}`}>
+                                {stock.isFavorite ? '★' : '☆'}
+                              </span>
+                            </button>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{stock.name}</p>
+                          <p className="text-xs text-muted-foreground">{stock.industry} | {stock.exchange}</p>
+                        </div>
                         <div className="text-right">
                           <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
                           <p className={`text-sm ${stock.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {stock.changePercent >= 0 ? '↑' : '↓'} {Math.abs(stock.changePercent).toFixed(2)}%
                           </p>
                         </div>
-                        <button
-                          className="hover:bg-accent/50 p-2 rounded-full transition-colors"
-                          onClick={() => toggleFavorite(stock.id)}
-                          title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                        >
-                          <span className={`text-xl ${stock.isFavorite ? 'text-primary' : 'text-muted-foreground'}`}>
-                            {stock.isFavorite ? '★' : '☆'}
-                          </span>
-                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 mt-2 text-sm text-muted-foreground">
+                        <div>
+                          <span className="font-medium">Market Cap:</span>
+                          <span className="ml-1">${(stock.marketCap / 1e9).toFixed(2)}B</span>
+                        </div>
+                        <div>
+                          <span className="font-medium">Volume:</span>
+                          <span className="ml-1">{(stock.volume / 1e6).toFixed(1)}M</span>
+                        </div>
+                        <div>
+                          <span className="font-medium">Beta:</span>
+                          <span className="ml-1">{stock.beta.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium">52W High:</span>
+                          <span className="ml-1">${stock.high52Week.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium">52W Low:</span>
+                          <span className="ml-1">${stock.low52Week.toFixed(2)}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -173,7 +200,9 @@ function StockApp() {
 
           <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
             <h2 className="text-2xl font-semibold mb-4">Market Data</h2>
-            <MarketTabs />
+            <ErrorBoundary>
+              <MarketTabs />
+            </ErrorBoundary>
           </div>
         </div>
       </main>
@@ -184,7 +213,9 @@ function StockApp() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <StockApp />
+      <ErrorBoundary>
+        <StockApp />
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 }

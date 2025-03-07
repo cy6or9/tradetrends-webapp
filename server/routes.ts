@@ -46,10 +46,12 @@ function broadcastStockUpdate(update: any) {
 
 // Stock search and filter endpoint
 async function searchAndFilterStocks(req: express.Request, res: express.Response) {
-  const { query, exchange, sector, minPrice, maxPrice, sort } = req.query;
+  const { query, exchange, sort, minPrice, maxPrice, minMarketCap, maxMarketCap } = req.query;
 
   try {
-    log('Search request params:', JSON.stringify({ query, exchange, sector, minPrice, maxPrice, sort }), 'search');
+    log('Search request params:', JSON.stringify({ 
+      query, exchange, sort, minPrice, maxPrice, minMarketCap, maxMarketCap 
+    }), 'search');
 
     // Get base stock list from Finnhub
     const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
@@ -70,24 +72,47 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
 
     log(`Filtered to ${stocks.length} stocks`, 'search');
 
-    // Get quotes for filtered stocks
+    // Get quotes and profiles for filtered stocks
     const quotedStocks = await Promise.all(
       stocks.slice(0, 100).map(async (stock: any) => {
         try {
-          const quoteRes = await fetch(`${FINNHUB_API_URL}/quote?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`);
-          const quote = await quoteRes.json();
-          if (!quoteRes.ok) {
-            log(`Failed to fetch quote for ${stock.symbol}: ${quoteRes.status}`, 'error');
+          const [quoteRes, profileRes] = await Promise.all([
+            fetch(`${FINNHUB_API_URL}/quote?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`),
+            fetch(`${FINNHUB_API_URL}/stock/profile2?symbol=${stock.symbol}&token=${FINNHUB_API_KEY}`)
+          ]);
+
+          const [quote, profile] = await Promise.all([
+            quoteRes.json(),
+            profileRes.json()
+          ]);
+
+          if (!quoteRes.ok || !profileRes.ok) {
+            log(`Failed to fetch data for ${stock.symbol}`, 'error');
             return null;
           }
-          return {
+
+          const stockData = {
             ...stock,
             price: quote.c || 0,
             change: quote.d || 0,
             changePercent: quote.dp || 0,
+            volume: quote.v || 0,
+            marketCap: profile.marketCapitalization * 1e6 || 0,
+            high52Week: profile.weekHigh52 || 0,
+            low52Week: profile.weekLow52 || 0,
+            beta: profile.beta || 0,
+            industry: profile.industry || 'Unknown'
           };
+
+          // Apply numeric filters
+          if (minPrice && stockData.price < Number(minPrice)) return null;
+          if (maxPrice && stockData.price > Number(maxPrice)) return null;
+          if (minMarketCap && stockData.marketCap < Number(minMarketCap)) return null;
+          if (maxMarketCap && stockData.marketCap > Number(maxMarketCap)) return null;
+
+          return stockData;
         } catch (error) {
-          log(`Error fetching quote for ${stock.symbol}: ${error}`, 'error');
+          log(`Error processing ${stock.symbol}: ${error}`, 'error');
           return null;
         }
       })
@@ -101,8 +126,8 @@ async function searchAndFilterStocks(req: express.Request, res: express.Response
     if (sort) {
       const [field, order] = sort.toString().split(':');
       validStocks.sort((a: any, b: any) => {
-        const aVal = a[field];
-        const bVal = b[field];
+        const aVal = a[field] || 0;
+        const bVal = b[field] || 0;
         return order === 'desc' ? bVal - aVal : aVal - bVal;
       });
     }
@@ -234,6 +259,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: 'Symbol parameter is required' });
     }
     proxyFinnhubRequest(`/stock/recommendation?symbol=${symbol}`, req, res);
+  });
+
+  app.get("/api/finnhub/stock/profile2", (req, res) => {
+    const symbol = req.query.symbol as string;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol parameter is required' });
+    }
+    proxyFinnhubRequest(`/stock/profile2?symbol=${symbol}`, req, res);
   });
 
   // Webhook endpoint for real-time updates
