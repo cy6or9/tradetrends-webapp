@@ -1,20 +1,11 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import App from "./App";
 import "./index.css";
 
-// Create a client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30000, // Data considered fresh for 30 seconds
-      refetchInterval: 30000, // Refetch every 30 seconds
-      retry: 3,
-      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000),
-    },
-  },
-});
+// Basic error logging
+window.onerror = (message, source, lineno, colno, error) => {
+  console.error('Global error:', { message, source, lineno, colno, error });
+};
 
 const rootElement = document.getElementById("root");
 
@@ -22,23 +13,39 @@ if (!rootElement) {
   throw new Error("Failed to find the root element");
 }
 
-// Create the root and render app
+// Create a minimal test component
+const TestComponent = () => (
+  <div className="p-4">
+    <h1 className="text-2xl">Loading Application...</h1>
+  </div>
+);
+
+// Create the root and render test component first
 const root = createRoot(rootElement);
 
-// Add error boundary to catch render errors
 try {
   root.render(
     <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
+      <TestComponent />
     </React.StrictMode>
   );
+
+  // If basic rendering works, dynamically import the full app
+  import('./App').then(({ default: App }) => {
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+  }).catch(error => {
+    console.error('Failed to load app:', error);
+    root.render(
+      <div className="p-4 text-red-500">
+        Failed to load application. Please check console for errors.
+      </div>
+    );
+  });
 } catch (error) {
   console.error("Failed to render app:", error);
-  root.render(
-    <div style={{ padding: "20px", color: "red" }}>
-      Failed to load application. Please check console for errors.
-    </div>
-  );
+  document.body.innerHTML = '<div style="padding: 20px; color: red;">Failed to initialize application.</div>';
 }

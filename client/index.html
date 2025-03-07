@@ -6,6 +6,18 @@
     <title>TradeTrends - Stock Market Analysis</title>
     <meta name="description" content="Advanced stock market analysis platform with real-time data and intelligent insights" />
     <base href="/" />
+    <style>
+      /* Prevent FOUC */
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: white;
+      }
+      #root {
+        min-height: 100%;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
