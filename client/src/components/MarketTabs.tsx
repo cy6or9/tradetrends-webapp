@@ -145,19 +145,26 @@ export function MarketTabs() {
                       <p className="text-sm text-muted-foreground">
                         {new Date(ipo.date).toLocaleDateString()}
                       </p>
-                      {typeof ipo.shares === 'number' && (
-                        <p className="text-sm text-muted-foreground">
-                          Shares: {formatNumber(ipo.shares)}
-                        </p>
-                      )}
+                      <div className="flex flex-col gap-1 mt-2">
+                        {typeof ipo.shares === 'number' && (
+                          <p className="text-sm text-muted-foreground">
+                            Shares offered: {formatNumber(ipo.shares)}
+                          </p>
+                        )}
+                        {typeof ipo.price === 'number' && (
+                          <p className="text-sm text-muted-foreground">
+                            Total value: ${formatNumber(ipo.shares * ipo.price)}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right">
                       <span className="px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
                         {ipo.exchange}
                       </span>
                       {typeof ipo.price === 'number' && (
-                        <p className="mt-1 font-medium">
-                          ${ipo.price.toFixed(2)}
+                        <p className="mt-2 font-medium">
+                          ${ipo.price.toFixed(2)} per share
                         </p>
                       )}
                     </div>
