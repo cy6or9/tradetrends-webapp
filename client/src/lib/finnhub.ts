@@ -25,15 +25,15 @@ class StockCache {
 
     const mergedData: Stock = {
       ...stockData,
-      // Keep historical data if current data is missing
+      // Always preserve historical data if current data is missing or invalid
       price: (stockData.price && stockData.price > 0) ? stockData.price : (existingData?.data.price || 0),
       marketCap: stockData.marketCap || existingData?.data.marketCap || 0,
       high52Week: stockData.high52Week || existingData?.data.high52Week || 0,
       low52Week: stockData.low52Week || existingData?.data.low52Week || 0,
       beta: stockData.beta || existingData?.data.beta || 0,
       volume: stockData.volume || existingData?.data.volume || 0,
-      change: stockData.change || 0,
-      changePercent: stockData.changePercent || 0,
+      change: stockData.change || existingData?.data.change || 0,
+      changePercent: stockData.changePercent || existingData?.data.changePercent || 0,
       isFavorite: existingData?.data.isFavorite || false,
       lastUpdate: new Date().toISOString()
     };
@@ -54,7 +54,7 @@ class StockCache {
   getAllStocks(): Stock[] {
     return Array.from(this.cache.values())
       .map(cached => cached.data)
-      .filter(stock => stock !== null);
+      .filter(stock => stock !== null && stock.price > 0);
   }
 
   clear() {
@@ -64,7 +64,6 @@ class StockCache {
 
 export const stockCache = StockCache.getInstance();
 
-// Types
 export interface Stock {
   id: string;
   symbol: string;
@@ -106,7 +105,8 @@ export async function getAllUsStocks(): Promise<Stock[]> {
       stockCache.updateStock(stock.symbol, stock);
     });
 
-    return data;
+    // Return either new data or cached data if empty
+    return data.length > 0 ? data : stockCache.getAllStocks();
   } catch (error) {
     console.error('Error fetching US stocks:', error);
     // Return cached stocks if API fails
@@ -117,7 +117,13 @@ export async function getAllUsStocks(): Promise<Stock[]> {
 export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null> {
   try {
     console.log(`Fetching crypto quote for ${symbol}...`);
-    const response = await fetch(`/api/finnhub/crypto/candle?symbol=BINANCE:${symbol}USDT`);
+    const now = Math.floor(Date.now() / 1000);
+    const oneDayAgo = now - 86400; // 24 hours ago
+
+    const response = await fetch(
+      `/api/finnhub/crypto/candle?symbol=BINANCE:${symbol}USDT&resolution=D&from=${oneDayAgo}&to=${now}`
+    );
+
     if (!response.ok) {
       throw new Error(`Failed to fetch crypto data: ${response.status}`);
     }
@@ -199,37 +205,7 @@ export async function getSpacList(): Promise<Spac[]> {
   }
 }
 
-// Schema definitions
-const stockQuoteSchema = z.object({
-  c: z.number(), // Current price
-  d: z.number(), // Change
-  dp: z.number(), // Percent change
-  h: z.number(), // High price of the day
-  l: z.number(), // Low price of the day
-  o: z.number(), // Open price of the day
-  pc: z.number(), // Previous close price
-  t: z.number(), // Timestamp
-  v: z.number() //volume
-});
-
-const companyProfileSchema = z.object({
-  marketCapitalization: z.number(),
-  shareOutstanding: z.number(),
-  beta: z.number().optional(),
-  weekHigh52: z.number().optional(),
-  weekLow52: z.number().optional(),
-  weekHighDate52: z.string().optional(),
-  weekLowDate52: z.string().optional(),
-  industry: z.string().optional(),
-  exchange: z.string(),
-  companyName: z.string(),
-  ticker: z.string(),
-});
-
-export type StockQuote = z.infer<typeof stockQuoteSchema>;
-export type CompanyProfile = z.infer<typeof companyProfileSchema>;
-
-
+// Type definitions
 export type IpoEvent = {
   symbol: string;
   name: string;
@@ -248,6 +224,18 @@ export type Spac = {
   trustValue: number;
   deadline?: string;
   exchange: string;
+};
+
+export type StockNews = {
+  category: string;
+  datetime: number;
+  headline: string;
+  id: number;
+  image: string;
+  related: string;
+  source: string;
+  summary: string;
+  url: string;
 };
 
 const stockNewsSchema = z.object({});
@@ -279,7 +267,6 @@ export async function getStockNews(symbol: string): Promise<StockNews[]> {
     return [];
   }
 }
-
 
 
 function getFinnhubApiKey(): string {
@@ -322,7 +309,33 @@ const recommendationSchema = z.object({
   symbol: z.string(),
 });
 
+const stockQuoteSchema = z.object({
+  c: z.number(), // Current price
+  d: z.number(), // Change
+  dp: z.number(), // Percent change
+  h: z.number(), // High price of the day
+  l: z.number(), // Low price of the day
+  o: z.number(), // Open price of the day
+  pc: z.number(), // Previous close price
+  t: z.number(), // Timestamp
+  v: z.number() //volume
+});
 
-export type StockNews = z.infer<typeof stockNewsSchema>;
+const companyProfileSchema = z.object({
+  marketCapitalization: z.number(),
+  shareOutstanding: z.number(),
+  beta: z.number().optional(),
+  weekHigh52: z.number().optional(),
+  weekLow52: z.number().optional(),
+  weekHighDate52: z.string().optional(),
+  weekLowDate52: z.string().optional(),
+  industry: z.string().optional(),
+  exchange: z.string(),
+  companyName: z.string(),
+  ticker: z.string(),
+});
+
+export type StockQuote = z.infer<typeof stockQuoteSchema>;
+export type CompanyProfile = z.infer<typeof companyProfileSchema>;
 
 const API_BASE_URL = 'https://finnhub.io/api/v1';

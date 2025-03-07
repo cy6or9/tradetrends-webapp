@@ -298,8 +298,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/finnhub/crypto/candle", (req, res) => {
     const { symbol, resolution, from, to } = req.query;
     if (!symbol || !resolution || !from || !to) {
+      log('Missing required parameters for crypto candle request', 'error');
       return res.status(400).json({ error: 'Missing required parameters' });
     }
+    log(`Crypto candle request for ${symbol} from ${from} to ${to}`, 'api');
     proxyFinnhubRequest(`/crypto/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}`, req, res);
   });
 
