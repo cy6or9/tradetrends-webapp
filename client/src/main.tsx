@@ -1,13 +1,20 @@
-import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import App from './App.vue';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import './assets/main.css';
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import App from "./App";
+import "./index.css";
 
-const pinia = createPinia();
-const app = createApp(App);
+const queryClient = new QueryClient();
+const rootElement = document.getElementById("root");
 
-app.use(pinia);
-app.mount('#root');
+if (!rootElement) {
+  throw new Error("Failed to find the root element");
+}
 
-console.log('Vue app mounted successfully');
+createRoot(rootElement).render(
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  </React.StrictMode>
+);

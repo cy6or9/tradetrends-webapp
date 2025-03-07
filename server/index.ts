@@ -24,9 +24,9 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     const logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
 
-    // Log HMR and static file requests for debugging
-    if (path.includes('__vite') || path.includes('.vue') || path.includes('.js')) {
-      log(`Vite request: ${logLine}`);
+    // Log Vite/Vue related requests for debugging
+    if (path.includes('__vite') || path.includes('.vue') || path.includes('.js') || path.includes('.ts')) {
+      log(`Vite request: ${logLine}`, 'vite');
     }
 
     // Log API responses
@@ -38,7 +38,7 @@ app.use((req, res, next) => {
       if (apiLog.length > 80) {
         apiLog = apiLog.slice(0, 79) + "…";
       }
-      log(apiLog);
+      log(apiLog, 'api');
     }
   });
 
@@ -46,6 +46,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Set development mode explicitly
+  process.env.NODE_ENV = 'development';
+
   const server = await registerRoutes(app);
 
   // Error handling middleware
@@ -54,7 +57,6 @@ app.use((req, res, next) => {
     const message = err.message || "Internal Server Error";
     log(`Error: ${message}`, 'error');
     res.status(status).json({ message });
-    // Remove throw as it will crash the server
     console.error(err);
   });
 
