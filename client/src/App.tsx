@@ -56,39 +56,40 @@ function StockApp() {
 
   // Handle real-time updates
   useEffect(() => {
-    if (lastMessage?.type === 'stockUpdate') {
-      const update = lastMessage.data;
-      setStocks(prevStocks =>
-        prevStocks.map(stock => {
-          if (stock.symbol === update.symbol) {
-            const changePercent = ((update.price - stock.price) / stock.price) * 100;
+    if (!lastMessage?.type || !lastMessage?.data) return;
+    if (lastMessage.type !== 'stockUpdate') return;
 
-            // Send notification for favorite stocks with significant changes
-            if (stock.isFavorite && Math.abs(changePercent) >= 1) {
-              sendNotification(
-                `${stock.symbol} Alert!`,
-                {
-                  body: `Price ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent).toFixed(2)}% to $${update.price.toFixed(2)}`,
-                  icon: '/favicon.ico',
-                  badge: '/favicon.ico',
-                  tag: stock.symbol // Prevent duplicate notifications for the same stock
-                }
-              );
-            }
+    const update = lastMessage.data;
+    setStocks(prevStocks => 
+      prevStocks.map(stock => {
+        if (stock.symbol === update.symbol) {
+          const changePercent = ((update.price - stock.price) / stock.price) * 100;
 
-            return {
-              ...stock,
-              price: update.price,
-              change: update.change,
-              changePercent,
-              lastUpdate: update.timestamp
-            };
+          // Send notification for favorite stocks with significant changes
+          if (stock.isFavorite && Math.abs(changePercent) >= 1) {
+            sendNotification(
+              `${stock.symbol} Alert!`,
+              {
+                body: `Price ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent).toFixed(2)}% to $${update.price.toFixed(2)}`,
+                icon: '/favicon.ico',
+                badge: '/favicon.ico',
+                tag: stock.symbol // Prevent duplicate notifications for the same stock
+              }
+            );
           }
-          return stock;
-        })
-      );
-    }
-  }, [lastMessage, sendNotification]);
+
+          return {
+            ...stock,
+            price: update.price,
+            change: update.change,
+            changePercent,
+            lastUpdate: update.timestamp
+          };
+        }
+        return stock;
+      })
+    );
+  }, [lastMessage, sendNotification]); // Only depend on lastMessage and sendNotification
 
   const toggleFavorite = async (stockId: string) => {
     if (!permissionGranted) {
