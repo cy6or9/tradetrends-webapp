@@ -40,7 +40,7 @@ class StockCacheManager {
     if (existing) {
       this.data.set(symbol, { ...existing, ...updates, lastUpdate: new Date().toISOString() });
     } else {
-      this.data.set(symbol, {...updates, lastUpdate: new Date().toISOString()})
+      this.data.set(symbol, { ...updates as Stock, lastUpdate: new Date().toISOString() });
     }
   }
 
@@ -74,7 +74,7 @@ export type StockQuote = z.infer<typeof stockQuoteSchema>;
 export type CompanyProfile = z.infer<typeof companyProfileSchema>;
 
 const US_EXCHANGE_SYMBOLS = ['NYSE', 'NASDAQ'];
-const BATCH_SIZE = 5; // Process 5 stocks at a time
+const BATCH_SIZE = 25; // Increased batch size for more stocks
 const RATE_LIMIT_DELAY = 250; // ms between batches
 
 // API Functions
@@ -87,8 +87,7 @@ export async function getAllUsStocks(): Promise<Stock[]> {
       .filter((stock: any) =>
         US_EXCHANGE_SYMBOLS.includes(stock.exchange) &&
         stock.type === 'Common Stock'
-      )
-      .slice(0, 200); // Top 200 stocks
+      ); // Remove the .slice(0, 200) to get all stocks
 
     console.log(`Processing ${activeStocks.length} stocks...`);
     const stocks: Stock[] = [];
@@ -104,11 +103,19 @@ export async function getAllUsStocks(): Promise<Stock[]> {
             fetch(`/api/finnhub/stock/profile2?symbol=${stock.symbol}`)
           ]);
 
-          const quote = await quoteRes.json();
-          const profile = await profileRes.json();
-
           if (!quoteRes.ok || !profileRes.ok) {
             console.warn(`Failed to fetch data for ${stock.symbol}`);
+            return null;
+          }
+
+          const [quote, profile] = await Promise.all([
+            quoteRes.json(),
+            profileRes.json()
+          ]);
+
+          // Skip stocks with no price data
+          if (!quote.c || quote.c === 0) {
+            console.warn(`No price data for ${stock.symbol}`);
             return null;
           }
 
@@ -116,11 +123,11 @@ export async function getAllUsStocks(): Promise<Stock[]> {
             id: stock.symbol,
             symbol: stock.symbol,
             name: profile.companyName || stock.description,
-            price: quote.c || 0,
+            price: quote.c,
             change: quote.d || 0,
             changePercent: quote.dp || 0,
             volume: quote.v || 0,
-            marketCap: profile.marketCapitalization * 1e6 || 0, // Convert to actual value
+            marketCap: profile.marketCapitalization * 1e6 || 0,
             high52Week: profile.weekHigh52 || 0,
             low52Week: profile.weekLow52 || 0,
             beta: profile.beta || 0,
@@ -136,7 +143,11 @@ export async function getAllUsStocks(): Promise<Stock[]> {
       });
 
       const batchResults = await Promise.all(batchPromises);
-      stocks.push(...batchResults.filter((s): s is Stock => s !== null));
+      const validResults = batchResults.filter((s): s is Stock => s !== null);
+      stocks.push(...validResults);
+
+      // Progress logging
+      console.log(`Processed ${stocks.length}/${activeStocks.length} stocks`);
 
       // Rate limiting delay between batches
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
@@ -149,38 +160,6 @@ export async function getAllUsStocks(): Promise<Stock[]> {
     return [];
   }
 }
-
-const cryptoCandleSchema = z.object({
-  c: z.array(z.number()),
-  h: z.array(z.number()),
-  l: z.array(z.number()),
-  o: z.array(z.number()),
-  t: z.array(z.number()),
-  s: z.string()
-});
-
-const stockSymbolSchema = z.object({
-  currency: z.string(),
-  description: z.string(),
-  displaySymbol: z.string(),
-  figi: z.string().optional(),
-  isin: z.string().optional(),
-  mic: z.string(),
-  symbol: z.string(),
-  type: z.string(),
-  exchange: z.string(),
-});
-
-const recommendationSchema = z.object({
-  buy: z.number(),
-  hold: z.number(),
-  period: z.string(),
-  sell: z.number(),
-  strongBuy: z.number(),
-  strongSell: z.number(),
-  symbol: z.string(),
-});
-
 
 export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null> {
   try {
@@ -216,6 +195,90 @@ export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null
   }
 }
 
+// Improved IPO and SPAC data schemas
+const ipoEventSchema = z.object({
+  symbol: z.string(),
+  name: z.string(),
+  date: z.string(),
+  price: z.number().optional(),
+  shares: z.number().optional(),
+  exchange: z.string(),
+  status: z.string()
+});
+
+const spacSchema = z.object({
+  symbol: z.string(),
+  name: z.string(),
+  status: z.string(),
+  targetCompany: z.string().optional(),
+  trustValue: z.number(),
+  deadline: z.string().optional(),
+  exchange: z.string()
+});
+
+export type CryptoQuote = {
+  c: number; // Current price
+  h: number; // High price
+  l: number; // Low price
+  o: number; // Open price
+  pc: number; // Previous close price
+  t: number; // Timestamp
+};
+
+export type IpoEvent = z.infer<typeof ipoEventSchema>;
+export type Spac = z.infer<typeof spacSchema>;
+
+export async function getIpoCalendar(): Promise<IpoEvent[]> {
+  try {
+    const response = await fetch('/api/finnhub/calendar/ipo');
+    if (!response.ok) throw new Error('Failed to fetch IPO calendar');
+    const data = await response.json();
+    return data.ipoCalendar || [];
+  } catch (error) {
+    console.error('Error fetching IPO calendar:', error);
+    return [];
+  }
+}
+
+export async function getSpacList(): Promise<Spac[]> {
+  try {
+    const response = await fetch('/api/finnhub/stock/symbol?exchange=US');
+    if (!response.ok) throw new Error('Failed to fetch SPAC list');
+
+    const symbols = await response.json();
+    const spacs = symbols.filter((s: any) =>
+      s.type === 'SPAC' ||
+      s.description?.toLowerCase().includes('spac') ||
+      s.description?.toLowerCase().includes('acquisition')
+    );
+
+    const spacData = await Promise.all(
+      spacs.map(async (spac: any) => {
+        try {
+          const profile = await fetch(`/api/finnhub/stock/profile2?symbol=${spac.symbol}`).then(res => res.json());
+          return {
+            symbol: spac.symbol,
+            name: profile.name || spac.description,
+            status: 'Active',
+            trustValue: profile.marketCapitalization * 1e6 || 0,
+            exchange: spac.exchange
+          };
+        } catch (error) {
+          console.error(`Error fetching SPAC data for ${spac.symbol}:`, error);
+          return null;
+        }
+      })
+    );
+
+    return spacData.filter((s): s is Spac => s !== null);
+  } catch (error) {
+    console.error('Error fetching SPAC list:', error);
+    return [];
+  }
+}
+
+const stockNewsSchema = z.object({});
+
 export async function getStockNews(symbol: string): Promise<StockNews[]> {
   const apiKey = getFinnhubApiKey();
   if (!apiKey) return [];
@@ -244,6 +307,7 @@ export async function getStockNews(symbol: string): Promise<StockNews[]> {
   }
 }
 
+
 function getFinnhubApiKey(): string {
   const apiKey = import.meta.env.VITE_FINNHUB_API_KEY;
   if (!apiKey) {
@@ -253,31 +317,38 @@ function getFinnhubApiKey(): string {
   return apiKey;
 }
 
+const cryptoCandleSchema = z.object({
+  c: z.array(z.number()),
+  h: z.array(z.number()),
+  l: z.array(z.number()),
+  o: z.array(z.number()),
+  t: z.array(z.number()),
+  s: z.string()
+});
 
-const ipoEventSchema = z.object({});
-const stockNewsSchema = z.object({});
-const spacSchema = z.object({});
+const stockSymbolSchema = z.object({
+  currency: z.string(),
+  description: z.string(),
+  displaySymbol: z.string(),
+  figi: z.string().optional(),
+  isin: z.string().optional(),
+  mic: z.string(),
+  symbol: z.string(),
+  type: z.string(),
+  exchange: z.string(),
+});
 
-export type CryptoQuote = {
-  c: number; // Current price
-  h: number; // High price
-  l: number; // Low price
-  o: number; // Open price
-  pc: number; // Previous close price
-  t: number; // Timestamp
-};
+const recommendationSchema = z.object({
+  buy: z.number(),
+  hold: z.number(),
+  period: z.string(),
+  sell: z.number(),
+  strongBuy: z.number(),
+  strongSell: z.number(),
+  symbol: z.string(),
+});
+
 
 export type StockNews = z.infer<typeof stockNewsSchema>;
-export type IpoEvent = z.infer<typeof ipoEventSchema>;
-export type Spac = z.infer<typeof spacSchema>;
-
-// Mock data for features not yet implemented
-export async function getSpacList(): Promise<Spac[]> {
-  return [];
-}
-
-export async function getIpoCalendar(): Promise<IpoEvent[]> {
-  return [];
-}
 
 const API_BASE_URL = 'https://finnhub.io/api/v1';

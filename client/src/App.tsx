@@ -122,82 +122,86 @@ function StockApp() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
-          <div className="grid gap-8 md:grid-cols-[300px,1fr]">
+          {/* Stock List Section */}
+          <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
+            <h2 className="text-2xl font-semibold mb-4">Live Stock Updates</h2>
+            {isLoading ? (
+              <div className="text-center text-muted-foreground">
+                <div className="animate-pulse text-primary">Loading stock data...</div>
+              </div>
+            ) : error ? (
+              <div className="text-center text-destructive">
+                <p>Failed to load stocks. Please try again later.</p>
+              </div>
+            ) : stocks.length === 0 ? (
+              <div className="text-center text-muted-foreground">
+                <p>No stocks found matching your filters.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {stocks.map(stock => (
+                  <div key={stock.symbol} className="p-4 border border-border/40 rounded-md hover:bg-accent/5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold">{stock.symbol}</h3>
+                          <button
+                            className="hover:bg-accent/50 p-1 rounded-full transition-colors"
+                            onClick={() => toggleFavorite(stock.id)}
+                            title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                          >
+                            <span className={`text-xl ${stock.isFavorite ? 'text-primary' : 'text-muted-foreground'}`}>
+                              {stock.isFavorite ? '★' : '☆'}
+                            </span>
+                          </button>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{stock.name}</p>
+                        <p className="text-xs text-muted-foreground">{stock.industry} | {stock.exchange}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
+                        <p className={`text-sm ${stock.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {stock.changePercent >= 0 ? '↑' : '↓'} {Math.abs(stock.changePercent).toFixed(2)}%
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 mt-2 text-sm text-muted-foreground">
+                      <div>
+                        <span className="font-medium">Market Cap:</span>
+                        <span className="ml-1">${(stock.marketCap / 1e9).toFixed(2)}B</span>
+                      </div>
+                      <div>
+                        <span className="font-medium">Volume:</span>
+                        <span className="ml-1">{(stock.volume / 1e6).toFixed(1)}M</span>
+                      </div>
+                      <div>
+                        <span className="font-medium">Beta:</span>
+                        <span className="ml-1">{stock.beta.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium">52W High:</span>
+                        <span className="ml-1">${stock.high52Week.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium">52W Low:</span>
+                        <span className="ml-1">${stock.low52Week.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Filters Section */}
+          <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
+            <h2 className="text-2xl font-semibold mb-4">Filter & Sort</h2>
             <ErrorBoundary>
               <StockFilters onFilterChange={setFilters} />
             </ErrorBoundary>
-
-            <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
-              <h2 className="text-2xl font-semibold mb-4">Stock List</h2>
-              {isLoading ? (
-                <div className="text-center text-muted-foreground">
-                  <div className="animate-pulse text-primary">Loading stock data...</div>
-                </div>
-              ) : error ? (
-                <div className="text-center text-destructive">
-                  <p>Failed to load stocks. Please try again later.</p>
-                </div>
-              ) : stocks.length === 0 ? (
-                <div className="text-center text-muted-foreground">
-                  <p>No stocks found matching your filters.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {stocks.map(stock => (
-                    <div key={stock.symbol} className="p-4 border border-border/40 rounded-md hover:bg-accent/5">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">{stock.symbol}</h3>
-                            <button
-                              className="hover:bg-accent/50 p-1 rounded-full transition-colors"
-                              onClick={() => toggleFavorite(stock.id)}
-                              title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                            >
-                              <span className={`text-xl ${stock.isFavorite ? 'text-primary' : 'text-muted-foreground'}`}>
-                                {stock.isFavorite ? '★' : '☆'}
-                              </span>
-                            </button>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{stock.name}</p>
-                          <p className="text-xs text-muted-foreground">{stock.industry} | {stock.exchange}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
-                          <p className={`text-sm ${stock.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {stock.changePercent >= 0 ? '↑' : '↓'} {Math.abs(stock.changePercent).toFixed(2)}%
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4 mt-2 text-sm text-muted-foreground">
-                        <div>
-                          <span className="font-medium">Market Cap:</span>
-                          <span className="ml-1">${(stock.marketCap / 1e9).toFixed(2)}B</span>
-                        </div>
-                        <div>
-                          <span className="font-medium">Volume:</span>
-                          <span className="ml-1">{(stock.volume / 1e6).toFixed(1)}M</span>
-                        </div>
-                        <div>
-                          <span className="font-medium">Beta:</span>
-                          <span className="ml-1">{stock.beta.toFixed(2)}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium">52W High:</span>
-                          <span className="ml-1">${stock.high52Week.toFixed(2)}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium">52W Low:</span>
-                          <span className="ml-1">${stock.low52Week.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
 
+          {/* Market Data Section */}
           <div className="rounded-lg border border-border/40 bg-card p-6 shadow-lg">
             <h2 className="text-2xl font-semibold mb-4">Market Data</h2>
             <ErrorBoundary>
