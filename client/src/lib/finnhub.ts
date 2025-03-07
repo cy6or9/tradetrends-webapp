@@ -34,63 +34,43 @@ const cryptoQuoteSchema = z.object({
   t: z.number(), // Timestamp
 });
 
-// SPAC schema
-const spacSchema = z.object({
-  symbol: z.string(),
-  name: z.string(),
-  targetCompany: z.string().optional(),
-  status: z.string(),
-  estimatedDealClose: z.string().optional(),
-  trustValue: z.number()
-});
+// Add request queue for rate limiting
+const requestQueue: Promise<any>[] = [];
+const MAX_CONCURRENT_REQUESTS = 3;
+const REQUEST_DELAY = 250; // 250ms between requests
 
-export type StockQuote = z.infer<typeof stockQuoteSchema>;
-export type StockNews = z.infer<typeof stockNewsSchema>;
-export type IpoEvent = z.infer<typeof ipoEventSchema>;
-export type CryptoQuote = z.infer<typeof cryptoQuoteSchema>;
-export type Spac = z.infer<typeof spacSchema>;
-
-// Stock news schema (existing)
-const stockNewsSchema = z.object({
-  category: z.string(),
-  datetime: z.number(),
-  headline: z.string(),
-  id: z.number(),
-  image: z.string(),
-  related: z.string(),
-  source: z.string(),
-  summary: z.string(),
-  url: z.string(),
-});
-
-
-// Utility function to get API key with error handling
-function getFinnhubApiKey(): string {
-  const apiKey = import.meta.env.VITE_FINNHUB_API_KEY;
-  if (!apiKey) {
-    console.warn('Finnhub API key not found. Some features may not work.');
-    return '';
+async function makeRequest(url: string) {
+  while (requestQueue.length >= MAX_CONCURRENT_REQUESTS) {
+    await requestQueue[0];
+    requestQueue.shift();
   }
-  return apiKey;
+
+  const request = fetch(url).then(async (response) => {
+    await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY));
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.statusText}`);
+    }
+    return response.json();
+  });
+
+  requestQueue.push(request);
+  return request;
 }
 
 export async function getStockQuote(symbol: string): Promise<StockQuote | null> {
-  const apiKey = getFinnhubApiKey();
-  if (!apiKey) return null;
+  const apiKey = import.meta.env.VITE_FINNHUB_API_KEY;
+  if (!apiKey) {
+    console.warn('Finnhub API key not found');
+    return null;
+  }
 
   try {
-    const response = await fetch(
+    const data = await makeRequest(
       `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`
     );
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch quote for ${symbol}`);
-    }
-
-    const data = await response.json();
     return stockQuoteSchema.parse(data);
   } catch (error) {
-    console.error('Error fetching stock quote:', error);
+    console.error(`Error fetching stock quote for ${symbol}:`, error);
     return null;
   }
 }
@@ -151,18 +131,23 @@ export async function getIpoCalendar(): Promise<IpoEvent[]> {
 
 export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null> {
   const apiKey = getFinnhubApiKey();
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.warn('Finnhub API key not found');
+    return null;
+  }
 
   try {
-    const response = await fetch(
-      `https://finnhub.io/api/v1/crypto/candle?symbol=BINANCE:${symbol}USDT&resolution=D&from=${Math.floor(Date.now()/1000 - 86400)}&to=${Math.floor(Date.now()/1000)}&token=${apiKey}`
+    const now = Math.floor(Date.now() / 1000);
+    const oneDayAgo = now - 86400;
+
+    const data = await makeRequest(
+      `https://finnhub.io/api/v1/crypto/candle?symbol=BINANCE:${symbol}USDT&resolution=D&from=${oneDayAgo}&to=${now}&token=${apiKey}`
     );
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch crypto quote for ${symbol}`);
+    if (!data.s || data.s === 'no_data') {
+      throw new Error('No data available');
     }
 
-    const data = await response.json();
     return cryptoQuoteSchema.parse({
       c: data.c[data.c.length - 1],
       h: data.h[data.h.length - 1],
@@ -172,7 +157,7 @@ export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null
       t: data.t[data.t.length - 1]
     });
   } catch (error) {
-    console.error('Error fetching crypto quote:', error);
+    console.error(`Error fetching crypto quote for ${symbol}:`, error);
     return null;
   }
 }
@@ -196,3 +181,43 @@ export async function getSpacList(): Promise<Spac[]> {
     }
   ];
 }
+
+// Utility function to get API key with error handling
+function getFinnhubApiKey(): string {
+  const apiKey = import.meta.env.VITE_FINNHUB_API_KEY;
+  if (!apiKey) {
+    console.warn('Finnhub API key not found. Some features may not work.');
+    return '';
+  }
+  return apiKey;
+}
+
+// Export types
+export type StockQuote = z.infer<typeof stockQuoteSchema>;
+export type StockNews = z.infer<typeof stockNewsSchema>;
+export type IpoEvent = z.infer<typeof ipoEventSchema>;
+export type CryptoQuote = z.infer<typeof cryptoQuoteSchema>;
+export type Spac = z.infer<typeof spacSchema>;
+
+// SPAC schema
+const spacSchema = z.object({
+  symbol: z.string(),
+  name: z.string(),
+  targetCompany: z.string().optional(),
+  status: z.string(),
+  estimatedDealClose: z.string().optional(),
+  trustValue: z.number()
+});
+
+// Stock news schema (existing)
+const stockNewsSchema = z.object({
+  category: z.string(),
+  datetime: z.number(),
+  headline: z.string(),
+  id: z.number(),
+  image: z.string(),
+  related: z.string(),
+  source: z.string(),
+  summary: z.string(),
+  url: z.string(),
+});

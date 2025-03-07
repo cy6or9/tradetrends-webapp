@@ -9,19 +9,32 @@ import { ZodError } from "zod";
 const clients = new Set<WebSocket>();
 
 // Test stocks for real-time updates
-const testStocks = ['AAPL', 'MSFT'];
+const testStocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'];
 
 // Mock function to simulate real-time stock updates
 function startStockUpdates(wss: WebSocketServer) {
   setInterval(() => {
     testStocks.forEach(symbol => {
-      const basePrice = symbol === 'AAPL' ? 175 : 285;
+      // Base prices for test stocks
+      const basePrices: { [key: string]: number } = {
+        'AAPL': 175,
+        'MSFT': 285,
+        'GOOGL': 134,
+        'AMZN': 175,
+        'META': 485
+      };
+
+      const basePrice = basePrices[symbol] || 100;
+      const change = (Math.random() * 2 - 1); // Random change between -1 and 1
+      const price = basePrice + change;
+      const changePercent = (change / basePrice) * 100;
+
       const mockUpdate = {
         type: 'stockUpdate',
         data: {
           symbol,
-          price: basePrice + Math.random() * 2 - 1, // Random price ±$1
-          change: (Math.random() * 2 - 1).toFixed(2),
+          price,
+          change: changePercent,
           timestamp: new Date().toISOString()
         }
       };
@@ -29,7 +42,12 @@ function startStockUpdates(wss: WebSocketServer) {
       // Broadcast to all connected clients
       clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(mockUpdate));
+          try {
+            client.send(JSON.stringify(mockUpdate));
+          } catch (error) {
+            console.error(`Failed to send update to client: ${error}`);
+            clients.delete(client);
+          }
         }
       });
     });
@@ -40,11 +58,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   // Create WebSocket server
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws',
+    perMessageDeflate: false // Disable compression for better performance
+  });
 
   wss.on('connection', (ws: WebSocket) => {
     console.log('Client connected to WebSocket');
     clients.add(ws);
+
+    // Send initial data immediately
+    testStocks.forEach(symbol => {
+      const initialUpdate = {
+        type: 'stockUpdate',
+        data: {
+          symbol,
+          price: 100,
+          change: 0,
+          timestamp: new Date().toISOString()
+        }
+      };
+      ws.send(JSON.stringify(initialUpdate));
+    });
 
     ws.on('message', (message: string) => {
       try {
@@ -57,6 +93,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     ws.on('close', () => {
       console.log('Client disconnected from WebSocket');
+      clients.delete(ws);
+    });
+
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
       clients.delete(ws);
     });
   });
