@@ -38,7 +38,8 @@ export function MarketTabs() {
   const cryptoQueries = CRYPTO_SYMBOLS.map(symbol => ({
     queryKey: ['crypto', symbol],
     queryFn: () => getCryptoQuote(symbol),
-    retry: 2,
+    retry: 3,
+    retryDelay: (attemptIndex: number) => Math.min(1000 * Math.pow(2, attemptIndex), 30000),
     refetchInterval: 10000 // Refresh every 10 seconds
   }));
 
@@ -55,6 +56,14 @@ export function MarketTabs() {
     queryFn: getSpacList,
     refetchInterval: 60000 * 5
   });
+
+  // Function to format large numbers
+  const formatNumber = (num: number) => {
+    if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
+    if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
+    if (num >= 1e3) return `${(num / 1e3).toFixed(2)}K`;
+    return num.toString();
+  };
 
   return (
     <div className="space-y-4">
@@ -94,7 +103,7 @@ export function MarketTabs() {
                   ) : error ? (
                     <div className="text-destructive">
                       <p className="font-medium">{symbol}</p>
-                      <p className="text-sm">Temporarily unavailable</p>
+                      <p className="text-sm">Error loading data - retrying...</p>
                     </div>
                   ) : quote ? (
                     <div className="flex justify-between items-center">
@@ -112,7 +121,10 @@ export function MarketTabs() {
                       </div>
                     </div>
                   ) : (
-                    <div className="text-destructive">Failed to load {symbol}</div>
+                    <div className="text-destructive">
+                      <p className="font-medium">{symbol}</p>
+                      <p className="text-sm">No data available</p>
+                    </div>
                   )}
                 </div>
               );
@@ -135,11 +147,21 @@ export function MarketTabs() {
                       <p className="text-sm text-muted-foreground">
                         {new Date(ipo.date).toLocaleDateString()}
                       </p>
+                      {ipo.shares && (
+                        <p className="text-sm text-muted-foreground">
+                          Shares: {formatNumber(ipo.shares)}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <span className="px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
                         {ipo.exchange}
                       </span>
+                      {ipo.price && (
+                        <p className="mt-1 font-medium">
+                          ${ipo.price.toFixed(2)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

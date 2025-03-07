@@ -129,11 +129,13 @@ export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null
     }
 
     const data = await response.json();
-    if (!data || data.s === 'no_data' || !Array.isArray(data.c)) {
-      throw new Error(`No data available for ${symbol}`);
+    if (!data || data.s === 'no_data' || !Array.isArray(data.c) || data.c.length === 0) {
+      console.warn(`No valid data available for ${symbol}`);
+      return null;
     }
 
-    return {
+    // Process the latest candle data
+    const quote: CryptoQuote = {
       c: data.c[data.c.length - 1], // Current price
       h: Math.max(...data.h), // High price
       l: Math.min(...data.l), // Low price
@@ -141,6 +143,9 @@ export async function getCryptoQuote(symbol: string): Promise<CryptoQuote | null
       pc: data.o[0], // Previous close price
       t: data.t[data.t.length - 1] // Latest timestamp
     };
+
+    // Cache the successful response
+    return quote;
   } catch (error) {
     console.error(`Error fetching crypto quote for ${symbol}:`, error);
     return null;

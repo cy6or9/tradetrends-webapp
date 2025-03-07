@@ -67,8 +67,8 @@ function StockApp() {
         if (typeof aVal === 'string' && typeof bVal === 'string') {
           aVal = aVal.toLowerCase();
           bVal = bVal.toLowerCase();
-          return order === 'desc' ? 
-            bVal.localeCompare(aVal) : 
+          return order === 'desc' ?
+            bVal.localeCompare(aVal) :
             aVal.localeCompare(bVal);
         }
 
@@ -170,8 +170,8 @@ function StockApp() {
               <AlertTitle>Error</AlertTitle>
               <AlertDescription className="flex items-center gap-2">
                 {error instanceof Error ? error.message : 'Failed to load stocks'}
-                <button 
-                  onClick={() => refetch()} 
+                <button
+                  onClick={() => refetch()}
                   className="ml-2 text-sm underline hover:no-underline"
                 >
                   Try again
@@ -191,7 +191,7 @@ function StockApp() {
             ) : stocks.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>No stocks found matching your filters.</p>
-                <button 
+                <button
                   onClick={() => setFilters({ query: '', exchange: '', sort: 'symbol:asc' })}
                   className="mt-2 text-sm text-primary hover:underline"
                 >
@@ -199,53 +199,36 @@ function StockApp() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {stocks.map(stock => (
-                  <div key={stock.symbol} className="p-4 border border-border/40 rounded-md hover:bg-accent/5">
+                  <div key={stock.symbol} className="p-2 border border-border/40 rounded-md hover:bg-accent/5">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{stock.symbol}</h3>
-                          <button
-                            className="hover:bg-accent/50 p-1 rounded-full transition-colors"
-                            onClick={() => toggleFavorite(stock.id)}
-                            title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                          >
-                            <span className={`text-xl ${stock.isFavorite ? 'text-primary' : 'text-muted-foreground'}`}>
-                              {stock.isFavorite ? '★' : '☆'}
-                            </span>
-                          </button>
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <div className="flex items-center gap-1">
+                            <h3 className="font-medium">{stock.symbol}</h3>
+                            <button
+                              className="hover:bg-accent/50 p-0.5 rounded-full transition-colors"
+                              onClick={() => toggleFavorite(stock.id)}
+                              title={stock.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                            >
+                              <span className={`text-sm ${stock.isFavorite ? 'text-primary' : 'text-muted-foreground'}`}>
+                                {stock.isFavorite ? '★' : '☆'}
+                              </span>
+                            </button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{stock.name}</p>
                         </div>
-                        <p className="text-sm text-muted-foreground">{stock.name}</p>
-                        <p className="text-xs text-muted-foreground">{stock.industry} | {stock.exchange}</p>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground ml-4">
+                          <span>Vol: {(stock.volume / 1e6).toFixed(1)}M</span>
+                          <span>Cap: ${(stock.marketCap / 1e9).toFixed(2)}B</span>
+                        </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-medium">${stock.price.toFixed(2)}</p>
-                        <p className={`text-sm ${stock.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        <p className="text-sm font-medium">${stock.price.toFixed(2)}</p>
+                        <p className={`text-xs ${stock.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                           {stock.changePercent >= 0 ? '↑' : '↓'} {Math.abs(stock.changePercent).toFixed(2)}%
                         </p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4 mt-2 text-sm text-muted-foreground">
-                      <div>
-                        <span className="font-medium">Market Cap:</span>
-                        <span className="ml-1">${(stock.marketCap / 1e9).toFixed(2)}B</span>
-                      </div>
-                      <div>
-                        <span className="font-medium">Volume:</span>
-                        <span className="ml-1">{(stock.volume / 1e6).toFixed(1)}M</span>
-                      </div>
-                      <div>
-                        <span className="font-medium">Beta:</span>
-                        <span className="ml-1">{stock.beta.toFixed(2)}</span>
-                      </div>
-                      <div>
-                        <span className="font-medium">52W High:</span>
-                        <span className="ml-1">${stock.high52Week.toFixed(2)}</span>
-                      </div>
-                      <div>
-                        <span className="font-medium">52W Low:</span>
-                        <span className="ml-1">${stock.low52Week.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
