@@ -1,11 +1,62 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertStockSchema, insertFavoriteSchema } from "@shared/schema";
 import { ZodError } from "zod";
 
+// Store connected clients
+const clients = new Set<WebSocket>();
+
+// Mock function to simulate real-time stock updates
+function startStockUpdates(wss: WebSocketServer) {
+  setInterval(() => {
+    const mockUpdate = {
+      type: 'stockUpdate',
+      data: {
+        symbol: 'AAPL',
+        price: 175 + Math.random() * 2 - 1, // Random price between 174-176
+        change: (Math.random() * 2 - 1).toFixed(2),
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    // Broadcast to all connected clients
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(mockUpdate));
+      }
+    });
+  }, 2000); // Update every 2 seconds
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+
+  // Create WebSocket server
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+
+  wss.on('connection', (ws: WebSocket) => {
+    console.log('Client connected to WebSocket');
+    clients.add(ws);
+
+    ws.on('message', (message: string) => {
+      try {
+        const data = JSON.parse(message.toString());
+        console.log('Received:', data);
+      } catch (error) {
+        console.error('Failed to parse WebSocket message:', error);
+      }
+    });
+
+    ws.on('close', () => {
+      console.log('Client disconnected from WebSocket');
+      clients.delete(ws);
+    });
+  });
+
+  // Start sending mock updates
+  startStockUpdates(wss);
 
   // Get all stocks
   app.get("/api/stocks", async (req, res) => {
@@ -73,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const userId = parseInt(req.params.userId);
     const stockId = parseInt(req.params.stockId);
     const { notify } = req.body;
-    
+
     if (typeof notify !== "boolean") {
       res.status(400).json({ message: "notify must be a boolean" });
       return;
