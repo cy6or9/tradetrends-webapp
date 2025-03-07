@@ -1,30 +1,61 @@
 import { useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-interface StockData {
+interface Stock {
+  id: string;
   symbol: string;
+  name: string;
   price: number;
   change: number;
+  changePercent: number;
   volume: number;
+  marketCap: number;
+  analystRating: number;
 }
 
-export default function App() {
-  const [stocks, setStocks] = useState<StockData[]>([]);
+const queryClient = new QueryClient();
+
+function StockApp() {
+  const [stocks, setStocks] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-4xl font-bold mb-2">Stock Market Analysis</h1>
-      <p className="text-muted-foreground mb-4">
-        Track stocks with high analyst ratings and market momentum
-      </p>
+    <div className="min-h-screen bg-background">
+      <header className="border-b">
+        <div className="container mx-auto px-4 py-6">
+          <h1 className="text-4xl font-bold text-foreground">Stock Market Analysis</h1>
+          <p className="text-lg text-muted-foreground mt-2">
+            Track stocks with high analyst ratings and market momentum
+          </p>
+        </div>
+      </header>
 
-      <div className="p-4 border rounded-lg bg-card">
-        {loading ? (
-          <p>Loading stock data...</p>
-        ) : (
-          <div>Stock list will be implemented here</div>
-        )}
-      </div>
+      <main className="container mx-auto px-4 py-8">
+        <div className="rounded-lg border bg-card p-6">
+          {loading ? (
+            <div className="text-center text-muted-foreground">
+              Loading stock data...
+            </div>
+          ) : stocks.length === 0 ? (
+            <div className="text-center text-muted-foreground">
+              No stocks found. Add some stocks to track.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Stock list will be implemented here */}
+              <p className="text-muted-foreground">Stock components coming soon...</p>
+            </div>
+          )}
+        </div>
+      </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <StockApp />
+    </QueryClientProvider>
   );
 }
