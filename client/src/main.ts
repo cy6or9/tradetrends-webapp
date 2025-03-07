@@ -1,23 +1,13 @@
 import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import { VueQueryPlugin } from '@tanstack/vue-query';
 import App from './App.vue';
-import router from './router';
-
-// Import Bootstrap and CSS
+import { createPinia } from 'pinia';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './assets/main.css';
 
-// Create Vue app
+const pinia = createPinia();
 const app = createApp(App);
 
-// Install plugins
-app.use(createPinia());
-app.use(router);
-app.use(VueQueryPlugin);
-
-// Mount app
+app.use(pinia);
 app.mount('#app');
 
-// Log successful mount for debugging
 console.log('Vue app mounted successfully');
