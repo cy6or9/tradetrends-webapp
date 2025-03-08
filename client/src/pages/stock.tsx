@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { StockChart } from "@/components/stock-chart";
-import { StockNews as StockNewsComponent } from "@/components/stock-news";
+import { StockNews } from "@/components/stock-news";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,15 @@ export default function StockPage() {
 
   // Fetch stock details
   const { data: stock, isLoading: isLoadingStock } = useQuery<Stock>({
-    queryKey: [`/api/stocks/${symbol}`],
+    queryKey: [`/api/stocks/search`],
+    queryFn: async () => {
+      const response = await fetch(`/api/stocks/search?search=${symbol}`);
+      if (!response.ok) throw new Error('Failed to fetch stock');
+      const data = await response.json();
+      const foundStock = data.stocks.find((s: Stock) => s.symbol === symbol);
+      if (!foundStock) throw new Error('Stock not found');
+      return foundStock;
+    },
   });
 
   if (isLoadingStock) {
@@ -93,7 +101,6 @@ export default function StockPage() {
         </CardContent>
       </Card>
 
-      {/* Placeholder for future chart and news components */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <Card>
@@ -101,7 +108,7 @@ export default function StockPage() {
               <CardTitle>Price Chart</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">Chart coming soon...</p>
+              <StockChart symbol={stock.symbol} />
             </CardContent>
           </Card>
         </div>
@@ -111,7 +118,7 @@ export default function StockPage() {
             <CardTitle>Latest News</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">News feed coming soon...</p>
+            <StockNews symbol={stock.symbol} />
           </CardContent>
         </Card>
       </div>

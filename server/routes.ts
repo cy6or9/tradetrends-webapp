@@ -40,7 +40,6 @@ const stockCache = new Map<string, { data: any; timestamp: number }>();
 // Store connected clients
 const clients = new Set<WebSocket>();
 
-
 async function refreshStockData(endpoint: string): Promise<any> {
   try {
     const url = `${FINNHUB_API_URL}${endpoint}`;
@@ -59,7 +58,6 @@ async function refreshStockData(endpoint: string): Promise<any> {
   }
 }
 
-// Update the finnhubRequest function to avoid recursive calls
 async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<any> {
   const cacheKey = `finnhub_${endpoint}`;
   const cached = stockCache.get(cacheKey);
@@ -105,7 +103,6 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
   throw lastError;
 }
 
-// Update the searchAndFilterStocks function
 async function searchAndFilterStocks(req: any, res: any) {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -113,6 +110,7 @@ async function searchAndFilterStocks(req: any, res: any) {
     const search = req.query.search?.toLowerCase();
     const exchange = req.query.exchange;
     const tradingApp = req.query.tradingApp;
+    const industry = req.query.industry;
 
     log('Starting stock search...', 'search');
     const symbols = await finnhubRequest('/stock/symbol?exchange=US');
@@ -131,8 +129,7 @@ async function searchAndFilterStocks(req: any, res: any) {
       .filter(stock => !search ||
         stock.symbol.toLowerCase().includes(search) ||
         stock.description.toLowerCase().includes(search)
-      )
-      .filter(stock => !tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp));
+      );
 
     log(`Filtered to ${activeStocks.length} active stocks`, 'search');
 
@@ -181,20 +178,23 @@ async function searchAndFilterStocks(req: any, res: any) {
               price: quote.c || 0,
               change: quote.d || 0,
               changePercent: quote.dp || 0,
-              volume: quote.v || 0,
+              volume: Math.max(quote.v || 0, 0), // Ensure volume is not negative
               marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
               beta: profile.beta || 0,
               exchange: stock.exchange,
-              industry: profile.industry || 'Unknown',
+              industry: profile.finnhubIndustry || 'Unknown',
               sector: profile.sector || 'Unknown',
               analystRating: Math.floor(Math.random() * 30) + 70, // Placeholder for demo
               lastUpdate: new Date().toISOString()
             };
 
-            stockCache.set(cacheKey, {
-              data: stockData,
-              timestamp: Date.now()
-            });
+            // Only cache valid data
+            if (stockData.volume > 0 && stockData.price > 0) {
+              stockCache.set(cacheKey, {
+                data: stockData,
+                timestamp: Date.now()
+              });
+            }
 
             return stockData;
           } catch (error) {
@@ -208,9 +208,16 @@ async function searchAndFilterStocks(req: any, res: any) {
       })
     );
 
-    log(`Sending ${stocks.length} stocks`, 'search');
+    // Apply industry filter after getting full stock data
+    const filteredStocks = stocks.filter(stock => 
+      !industry || industry === 'Any' || stock.industry === industry
+    ).filter(stock =>
+      !tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp)
+    );
+
+    log(`Sending ${filteredStocks.length} stocks`, 'search');
     res.json({
-      stocks,
+      stocks: filteredStocks,
       hasMore: endIndex < activeStocks.length,
       total: activeStocks.length
     });
@@ -220,7 +227,7 @@ async function searchAndFilterStocks(req: any, res: any) {
   }
 }
 
-// Add helper function for trading app filtering
+// Helper function for trading app filtering
 function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
   // More comprehensive list of stocks available on different platforms
   const platformStockLists: Record<string, Set<string>> = {
@@ -264,30 +271,6 @@ function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
   }
 
   return platformStockLists[platform].has(symbol);
-}
-
-// WebSocket update broadcasting
-function broadcastStockUpdate(update: any) {
-  const message = JSON.stringify({
-    type: 'stockUpdate',
-    data: {
-      symbol: update.symbol,
-      price: update.data.price,
-      change: update.data.change,
-      timestamp: update.data.timestamp
-    }
-  });
-
-  clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      try {
-        client.send(message);
-      } catch (error) {
-        log(`Failed to send update: ${error}`, 'websocket');
-        clients.delete(client);
-      }
-    }
-  });
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -360,28 +343,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch IPO calendar' });
     }
   });
-
-  app.get("/api/finnhub/stock/symbol", (_req: any, res: any) => {
-    proxyFinnhubRequest('/stock/symbol?exchange=US', res);
-  });
-
-  app.get("/api/finnhub/stock/profile2", (req: any, res: any) => {
-    const symbol = req.query.symbol as string;
-    if (!symbol) {
-      return res.status(400).json({ error: 'Symbol parameter is required' });
-    }
-    proxyFinnhubRequest(`/stock/profile2?symbol=${symbol}`, res);
-  });
-
-  async function proxyFinnhubRequest(endpoint: string, res: any) {
-    try {
-      const data = await finnhubRequest(endpoint);
-      res.json(data);
-    } catch (error) {
-      log(`Proxy error: ${error}`, 'error');
-      res.status(500).json({ error: 'Failed to fetch data' });
-    }
-  }
 
   return httpServer;
 }

@@ -30,6 +30,50 @@ const TRADING_APPS = [
   "Interactive Brokers",
 ];
 
+const EXCHANGES = [
+  "Any",
+  "NYSE",
+  "NASDAQ",
+  "AMEX",
+  "OTC",
+];
+
+const INDUSTRIES = [
+  "Any",
+  "Software",
+  "Hardware",
+  "Semiconductors",
+  "Biotechnology",
+  "Banking",
+  "Insurance",
+  "Retail",
+  "Oil & Gas",
+  "Mining",
+  "Manufacturing",
+  "Real Estate",
+  "Airlines",
+  "Automotive",
+  "Cannabis",
+  "Chemicals",
+  "Construction",
+  "Consumer Products",
+  "Defense",
+  "E-commerce",
+  "Education",
+  "Entertainment",
+  "Food & Beverage",
+  "Gaming",
+  "Healthcare",
+  "Internet Media",
+  "Logistics",
+  "Metals",
+  "Pharmaceuticals",
+  "Renewable Energy",
+  "Telecommunications",
+  "Travel & Leisure",
+  "Utilities"
+];
+
 const filterSchema = z.object({
   search: z.string().optional(),
   minPrice: z.string().optional(),
@@ -43,7 +87,7 @@ const filterSchema = z.object({
   maxMarketCap: z.string().optional(),
   minBeta: z.string().optional(),
   maxBeta: z.string().optional(),
-  industries: z.array(z.string()).optional(),
+  industry: z.string().optional(),
   exchange: z.string().optional(),
   tradingApp: z.string().optional(),
   sortBy: z.string().optional(),
@@ -56,39 +100,6 @@ interface StockFiltersProps {
   onFilterChange: (filters: FilterValues) => void;
 }
 
-const EXCHANGES = [
-  "Any",
-  "NYSE",
-  "NASDAQ",
-  "AMEX",
-  "OTC",
-];
-
-const SECTORS = [
-  "Technology",
-  "Healthcare",
-  "Finance",
-  "Consumer Discretionary",
-  "Energy",
-  "Materials",
-  "Industrials",
-  "Utilities",
-  "Real Estate",
-];
-
-const INDUSTRIES = [
-  "Software",
-  "Hardware",
-  "Semiconductors",
-  "Biotechnology",
-  "Banking",
-  "Insurance",
-  "Retail",
-  "Oil & Gas",
-  "Mining",
-  "Manufacturing",
-];
-
 export function StockFilters({ onFilterChange }: StockFiltersProps) {
   const form = useForm<FilterValues>({
     resolver: zodResolver(filterSchema),
@@ -97,6 +108,8 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
       sortBy: "analystRating",
       sortDir: "desc",
       exchange: "Any",
+      industry: "Any",
+      tradingApp: "Any",
     },
   });
 
@@ -171,6 +184,33 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                     {TRADING_APPS.map((app) => (
                       <SelectItem key={app} value={app}>
                         {app}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="industry"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-cyan-500">Industry</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
+                      <SelectValue placeholder="Select industry" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {INDUSTRIES.map((industry) => (
+                      <SelectItem key={industry} value={industry}>
+                        {industry}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -379,60 +419,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
 
           <FormField
             control={form.control}
-            name="sectors"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-cyan-500">Sector</FormLabel>
-                <Select
-                  onValueChange={(value) => field.onChange([value])}
-                  value={field.value?.[0]}
-                >
-                  <FormControl>
-                    <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
-                      <SelectValue placeholder="Select sector" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {SECTORS.map((sector) => (
-                      <SelectItem key={sector} value={sector}>
-                        {sector}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="industries"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-cyan-500">Industry</FormLabel>
-                <Select
-                  onValueChange={(value) => field.onChange([value])}
-                  value={field.value?.[0]}
-                >
-                  <FormControl>
-                    <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
-                      <SelectValue placeholder="Select industry" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {INDUSTRIES.map((industry) => (
-                      <SelectItem key={industry} value={industry}>
-                        {industry}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
             name="sortBy"
             render={({ field }) => (
               <FormItem>
@@ -488,12 +474,16 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               sortBy: "analystRating",
               sortDir: "desc",
               exchange: "Any",
+              industry: "Any",
+              tradingApp: "Any",
             });
             onFilterChange({
               minPrice: "0.03",
               sortBy: "analystRating",
               sortDir: "desc",
               exchange: "Any",
+              industry: "Any",
+              tradingApp: "Any",
             });
           }}
         >
