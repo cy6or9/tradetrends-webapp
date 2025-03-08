@@ -28,14 +28,13 @@ interface StockListProps {
     maxMarketCap?: number;
     minBeta?: number;
     maxBeta?: number;
-    sectors?: string[];
     industries?: string[];
     sortBy?: string;
     sortDir?: "asc" | "desc";
     search?: string;
     tradingApp?: string;
-    industry?: string; // Added industry filter
-    exchange?: string; // Added exchange filter
+    industry?: string;
+    exchange?: string;
   };
   setStocks?: (stocks: Stock[]) => void;
 }
@@ -81,10 +80,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
   } = useInfiniteQuery({
     queryKey: ["/api/stocks", filters],
     queryFn: fetchStocks,
-    getNextPageParam: (lastPage, pages) => {
-      return lastPage.hasMore ? pages.length + 1 : undefined;
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.total / 50 + 1 : undefined;
     },
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: 30000,
     initialPageParam: 1,
   });
 
@@ -113,11 +112,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, [handleObserver]);
 
   const handleSort = (sortBy: string) => {
-    if (sort && sort.sortBy === sortBy) {
-      setSort({sortBy, sortDir: sort.sortDir === "asc" ? "desc" : "asc"});
-    } else {
-      setSort({sortBy, sortDir: "asc"});
-    }
+    setSort(current => ({
+      sortBy,
+      sortDir: current?.sortBy === sortBy && current.sortDir === "asc" ? "desc" : "asc"
+    }));
   };
 
   // Flatten and filter all stocks from all pages
@@ -135,9 +133,25 @@ export function StockList({ filters, setStocks }: StockListProps) {
       if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
       if (filters.minBeta && stock.beta < filters.minBeta) return false;
       if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
-      if (filters.industries?.length && !filters.industries.includes(stock.industry)) return false;
       return true;
     });
+
+  // Sort stocks if sorting is active
+  if (sort) {
+    filteredStocks.sort((a, b) => {
+      const aVal = a[sort.sortBy as keyof Stock];
+      const bVal = b[sort.sortBy as keyof Stock];
+      const modifier = sort.sortDir === "asc" ? 1 : -1;
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return (aVal - bVal) * modifier;
+      }
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return aVal.localeCompare(bVal) * modifier;
+      }
+      return 0;
+    });
+  }
 
   // Update parent component with stock count
   useEffect(() => {
@@ -164,23 +178,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
         No stocks found matching your criteria.
       </div>
     );
-  }
-
-  // Sort stocks if sorting is active
-  if (sort && sort.sortBy) {
-    filteredStocks.sort((a, b) => {
-      const aVal = a[sort.sortBy as keyof Stock];
-      const bVal = b[sort.sortBy as keyof Stock];
-      const modifier = sort.sortDir === "asc" ? 1 : -1;
-
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return (aVal - bVal) * modifier;
-      }
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return aVal.localeCompare(bVal) * modifier;
-      }
-      return 0;
-    });
   }
 
   return (
