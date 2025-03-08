@@ -24,11 +24,11 @@ function formatVolume(volume: number): number {
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
 // Update cache settings and batch processing
-const RATE_LIMIT_DELAY = 1000; // Reduce delay between requests
-const MAX_CACHE_AGE = 15 * 60 * 1000; // Extend max cache age to 15 minutes
-const CACHE_TTL = 5 * 60 * 1000; // Increase cache time to 5 minutes
-const BATCH_SIZE = 10; // Increase batch size for faster loading
-const MAX_RETRIES = 5;
+const RATE_LIMIT_DELAY = 1000; // 1 second between requests
+const MAX_CACHE_AGE = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const BATCH_SIZE = 5; // Reduce batch size to avoid rate limits
+const MAX_RETRIES = 3;
 
 // In-memory caches with timestamps
 const stockCache = new Map<string, { data: any; timestamp: number }>();
@@ -143,82 +143,79 @@ async function searchAndFilterStocks(req: any, res: any) {
     const paginatedStocks = activeStocks.slice(startIndex, endIndex);
 
     const stocks = [];
-    // Process stocks in parallel batches
-    const batches = [];
+    // Process stocks in parallel batches with increased delays
     for (let i = 0; i < paginatedStocks.length; i += BATCH_SIZE) {
       const batch = paginatedStocks.slice(i, i + BATCH_SIZE);
-      batches.push(batch);
-    }
 
-    // Process batches concurrently with rate limiting
-    await Promise.all(
-      batches.map(async (batch, index) => {
-        // Add delay between batch starts
-        await new Promise(resolve => setTimeout(resolve, index * RATE_LIMIT_DELAY));
+      // Process each batch sequentially to avoid rate limits
+      const batchPromises = batch.map(async (stock) => {
+        try {
+          // Check cache first
+          const cacheKey = `stock_${stock.symbol}`;
+          const cached = stockCache.get(cacheKey);
+          if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            return cached.data;
+          }
 
-        const batchPromises = batch.map(async (stock) => {
-          try {
-            // Check cache first
-            const cacheKey = `stock_${stock.symbol}`;
-            const cached = stockCache.get(cacheKey);
-            if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-              return cached.data;
-            }
+          // Add delay between requests
+          await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
 
-            const [quote, profile] = await Promise.all([
-              finnhubRequest(`/quote?symbol=${stock.symbol}`),
-              finnhubRequest(`/stock/profile2?symbol=${stock.symbol}`)
-            ]);
+          const [quote, profile] = await Promise.all([
+            finnhubRequest(`/quote?symbol=${stock.symbol}`),
+            finnhubRequest(`/stock/profile2?symbol=${stock.symbol}`)
+          ]);
 
-            if (!quote || !profile) {
-              log(`Missing data for ${stock.symbol}`, 'error');
-              return null;
-            }
-
-            // Format volume data properly
-            const volume = formatVolume(quote.v);
-            if (volume === 0) {
-              log(`Zero volume for ${stock.symbol}`, 'warning');
-            }
-
-            const stockData = {
-              id: stock.symbol,
-              symbol: stock.symbol,
-              name: profile.name || stock.description,
-              price: quote.c || 0,
-              change: quote.d || 0,
-              changePercent: quote.dp || 0,
-              volume: volume,
-              marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
-              beta: profile.beta || 0,
-              exchange: stock.exchange,
-              industry: profile.finnhubIndustry || 'Unknown',
-              analystRating: Math.floor(Math.random() * 30) + 70, // Placeholder for demo
-              lastUpdate: new Date().toISOString()
-            };
-
-            // Only cache valid data
-            if (stockData.volume > 0 && stockData.price > 0) {
-              stockCache.set(cacheKey, {
-                data: stockData,
-                timestamp: Date.now()
-              });
-              log(`Cached data for ${stock.symbol}`, 'cache');
-            }
-
-            return stockData;
-          } catch (error) {
-            log(`Error processing ${stock.symbol}: ${error}`, 'error');
+          if (!quote || !profile) {
+            log(`Missing data for ${stock.symbol}`, 'error');
             return null;
           }
-        });
 
-        const batchResults = await Promise.all(batchPromises);
-        const validResults = batchResults.filter(Boolean);
-        log(`Processed batch with ${validResults.length} valid results`, 'batch');
-        stocks.push(...validResults);
-      })
-    );
+          // Format volume data properly
+          const volume = formatVolume(quote.v);
+          if (volume === 0) {
+            log(`Zero volume for ${stock.symbol}`, 'warning');
+          }
+
+          const stockData = {
+            id: stock.symbol,
+            symbol: stock.symbol,
+            name: profile.name || stock.description,
+            price: quote.c || 0,
+            change: quote.d || 0,
+            changePercent: quote.dp || 0,
+            volume: volume,
+            marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
+            beta: profile.beta || 0,
+            exchange: stock.exchange,
+            industry: profile.finnhubIndustry || 'Unknown',
+            analystRating: Math.floor(Math.random() * 30) + 70, // Placeholder for demo
+            lastUpdate: new Date().toISOString()
+          };
+
+          // Only cache valid data
+          if (stockData.volume > 0 && stockData.price > 0) {
+            stockCache.set(cacheKey, {
+              data: stockData,
+              timestamp: Date.now()
+            });
+            log(`Cached data for ${stock.symbol}`, 'cache');
+          }
+
+          return stockData;
+        } catch (error) {
+          log(`Error processing ${stock.symbol}: ${error}`, 'error');
+          return null;
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      const validResults = batchResults.filter(Boolean);
+      log(`Processed batch with ${validResults.length} valid results`, 'batch');
+      stocks.push(...validResults);
+
+      // Add delay between batches
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 2));
+    }
 
     // Apply filters after getting full stock data
     const filteredStocks = stocks
@@ -298,6 +295,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     path: '/ws',
     perMessageDeflate: false
   });
+
+  // Store connected clients
+  const clients = new Set<WebSocket>();
 
   // Update the WebSocket connection handling
   wss.on('connection', (ws: WebSocket) => {
