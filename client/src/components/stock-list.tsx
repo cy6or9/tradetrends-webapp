@@ -34,6 +34,8 @@ interface StockListProps {
     sortDir?: "asc" | "desc";
     search?: string;
     tradingApp?: string;
+    industry?: string; // Added industry filter
+    exchange?: string; // Added exchange filter
   };
   setStocks?: (stocks: Stock[]) => void;
 }
@@ -59,7 +61,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
       page: pageParam.toString(),
       limit: '50',
       ...(filters.search && { search: filters.search }),
-      ...(filters.tradingApp && { tradingApp: filters.tradingApp })
+      ...(filters.tradingApp && { tradingApp: filters.tradingApp }),
+      ...(filters.industry && { industry: filters.industry }),
+      ...(filters.exchange && { exchange: filters.exchange })
     });
 
     const response = await fetch(`/api/stocks/search?${searchParams}`);
@@ -73,6 +77,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    isError,
   } = useInfiniteQuery({
     queryKey: ["/api/stocks", filters],
     queryFn: fetchStocks,
@@ -80,6 +85,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
       return lastPage.hasMore ? pages.length + 1 : undefined;
     },
     staleTime: 30000, // Consider data fresh for 30 seconds
+    initialPageParam: 1,
   });
 
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
@@ -115,22 +121,23 @@ export function StockList({ filters, setStocks }: StockListProps) {
   };
 
   // Flatten and filter all stocks from all pages
-  const allStocks = data?.pages.flatMap(page => page.stocks) ?? [];
-  const filteredStocks = allStocks.filter((stock) => {
-    if (filters.minPrice && stock.price < filters.minPrice) return false;
-    if (filters.maxPrice && stock.price > filters.maxPrice) return false;
-    if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
-    if (filters.maxChangePercent && stock.changePercent > filters.maxChangePercent) return false;
-    if (filters.minAnalystRating && stock.analystRating < filters.minAnalystRating) return false;
-    if (filters.minVolume && stock.volume < filters.minVolume * 1_000_000) return false;
-    if (filters.maxVolume && stock.volume > filters.maxVolume * 1_000_000) return false;
-    if (filters.minMarketCap && stock.marketCap < filters.minMarketCap * 1_000_000_000) return false;
-    if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
-    if (filters.minBeta && stock.beta < filters.minBeta) return false;
-    if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
-    if (filters.industries?.length && !filters.industries.includes(stock.industry)) return false;
-    return true;
-  });
+  const filteredStocks = (data?.pages.flatMap(page => page.stocks) ?? [])
+    .filter((stock) => {
+      if (!stock) return false;
+      if (filters.minPrice && stock.price < filters.minPrice) return false;
+      if (filters.maxPrice && stock.price > filters.maxPrice) return false;
+      if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
+      if (filters.maxChangePercent && stock.changePercent > filters.maxChangePercent) return false;
+      if (filters.minAnalystRating && stock.analystRating < filters.minAnalystRating) return false;
+      if (filters.minVolume && stock.volume < filters.minVolume * 1_000_000) return false;
+      if (filters.maxVolume && stock.volume > filters.maxVolume * 1_000_000) return false;
+      if (filters.minMarketCap && stock.marketCap < filters.minMarketCap * 1_000_000_000) return false;
+      if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
+      if (filters.minBeta && stock.beta < filters.minBeta) return false;
+      if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
+      if (filters.industries?.length && !filters.industries.includes(stock.industry)) return false;
+      return true;
+    });
 
   // Update parent component with stock count
   useEffect(() => {
@@ -138,6 +145,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
       setStocks?.(filteredStocks);
     }
   }, [filteredStocks, setStocks]);
+
+  if (isError) {
+    return (
+      <div className="p-8 text-center text-red-500">
+        Error loading stocks. Please try again.
+      </div>
+    );
+  }
 
   if (isLoading) {
     return <LoadingSpinner />;

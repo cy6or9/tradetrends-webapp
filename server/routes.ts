@@ -16,6 +16,11 @@ function log(message: string, source = 'server') {
   console.log(`[${timestamp}] [${source}]: ${message}`);
 }
 
+// Add this near the top after imports
+function formatVolume(volume: number): number {
+  return Math.max(volume || 0, 0);
+}
+
 // Finnhub API configuration
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
@@ -40,6 +45,7 @@ const stockCache = new Map<string, { data: any; timestamp: number }>();
 // Store connected clients
 const clients = new Set<WebSocket>();
 
+// Update the stock data fetching
 async function refreshStockData(endpoint: string): Promise<any> {
   try {
     const url = `${FINNHUB_API_URL}${endpoint}`;
@@ -51,10 +57,14 @@ async function refreshStockData(endpoint: string): Promise<any> {
     }
 
     const data = await response.json();
+    if (!data) {
+      throw new Error('Invalid API response');
+    }
+
     return data;
   } catch (error) {
     console.error(`Error refreshing data for ${endpoint}:`, error);
-    return null;
+    throw error;
   }
 }
 
@@ -171,6 +181,12 @@ async function searchAndFilterStocks(req: any, res: any) {
               return null;
             }
 
+            // Format volume data properly
+            const volume = formatVolume(quote.v);
+            if (volume === 0) {
+              log(`Zero volume for ${stock.symbol}`, 'warning');
+            }
+
             const stockData = {
               id: stock.symbol,
               symbol: stock.symbol,
@@ -178,12 +194,11 @@ async function searchAndFilterStocks(req: any, res: any) {
               price: quote.c || 0,
               change: quote.d || 0,
               changePercent: quote.dp || 0,
-              volume: Math.max(quote.v || 0, 0), // Ensure volume is not negative
+              volume: volume,
               marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
               beta: profile.beta || 0,
               exchange: stock.exchange,
               industry: profile.finnhubIndustry || 'Unknown',
-              sector: profile.sector || 'Unknown',
               analystRating: Math.floor(Math.random() * 30) + 70, // Placeholder for demo
               lastUpdate: new Date().toISOString()
             };
@@ -194,6 +209,7 @@ async function searchAndFilterStocks(req: any, res: any) {
                 data: stockData,
                 timestamp: Date.now()
               });
+              log(`Cached data for ${stock.symbol}`, 'cache');
             }
 
             return stockData;
@@ -204,16 +220,22 @@ async function searchAndFilterStocks(req: any, res: any) {
         });
 
         const batchResults = await Promise.all(batchPromises);
-        stocks.push(...batchResults.filter(Boolean));
+        const validResults = batchResults.filter(Boolean);
+        log(`Processed batch with ${validResults.length} valid results`, 'batch');
+        stocks.push(...validResults);
       })
     );
 
-    // Apply industry filter after getting full stock data
-    const filteredStocks = stocks.filter(stock => 
-      !industry || industry === 'Any' || stock.industry === industry
-    ).filter(stock =>
-      !tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp)
-    );
+    // Apply filters after getting full stock data
+    const filteredStocks = stocks
+      .filter(stock => stock !== null)
+      .filter(stock => stock.volume > 0)  // Only include stocks with valid volume
+      .filter(stock => 
+        !industry || industry === 'Any' || stock.industry === industry
+      )
+      .filter(stock =>
+        !tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp)
+      );
 
     log(`Sending ${filteredStocks.length} stocks`, 'search');
     res.json({
