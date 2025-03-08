@@ -112,6 +112,7 @@ async function searchAndFilterStocks(req: any, res: any) {
     const limit = parseInt(req.query.limit) || 50;
     const search = req.query.search?.toLowerCase();
     const exchange = req.query.exchange;
+    const tradingApp = req.query.tradingApp;
 
     log('Starting stock search...', 'search');
     const symbols = await finnhubRequest('/stock/symbol?exchange=US');
@@ -130,7 +131,8 @@ async function searchAndFilterStocks(req: any, res: any) {
       .filter(stock => !search ||
         stock.symbol.toLowerCase().includes(search) ||
         stock.description.toLowerCase().includes(search)
-      );
+      )
+      .filter(stock => !tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp));
 
     log(`Filtered to ${activeStocks.length} active stocks`, 'search');
 
@@ -216,6 +218,23 @@ async function searchAndFilterStocks(req: any, res: any) {
     log(`Search failed: ${error}`, 'error');
     res.status(500).json({ error: 'Failed to fetch stocks' });
   }
+}
+
+// Add helper function for trading app filtering
+function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
+  // This is a simplified implementation. In a real app, you'd want to maintain
+  // a database or API of which stocks are available on which platforms
+  const platformStockLists: Record<string, Set<string>> = {
+    'Robinhood': new Set(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META']), // Example stocks
+    'TD Ameritrade': new Set(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NFLX']),
+    // Add more platforms and their available stocks
+  };
+
+  if (platform === 'Any' || !platformStockLists[platform]) {
+    return true;
+  }
+
+  return platformStockLists[platform].has(symbol);
 }
 
 // WebSocket update broadcasting

@@ -19,6 +19,17 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+const TRADING_APPS = [
+  "Any",
+  "Robinhood",
+  "TD Ameritrade",
+  "E*TRADE",
+  "Fidelity",
+  "Charles Schwab",
+  "Webull",
+  "Interactive Brokers",
+];
+
 const filterSchema = z.object({
   search: z.string().optional(),
   minPrice: z.string().optional(),
@@ -32,9 +43,9 @@ const filterSchema = z.object({
   maxMarketCap: z.string().optional(),
   minBeta: z.string().optional(),
   maxBeta: z.string().optional(),
-  sectors: z.array(z.string()).optional(),
   industries: z.array(z.string()).optional(),
   exchange: z.string().optional(),
+  tradingApp: z.string().optional(),
   sortBy: z.string().optional(),
   sortDir: z.enum(["asc", "desc"]).optional(),
 });
@@ -133,6 +144,33 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                     {EXCHANGES.map((exchange) => (
                       <SelectItem key={exchange} value={exchange}>
                         {exchange}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tradingApp"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-cyan-500">Trading Platform</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
+                      <SelectValue placeholder="Select trading platform" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {TRADING_APPS.map((app) => (
+                      <SelectItem key={app} value={app}>
+                        {app}
                       </SelectItem>
                     ))}
                   </SelectContent>

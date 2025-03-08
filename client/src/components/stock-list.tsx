@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -32,6 +32,8 @@ interface StockListProps {
     industries?: string[];
     sortBy?: string;
     sortDir?: "asc" | "desc";
+    search?: string;
+    tradingApp?: string;
   };
   setStocks?: (stocks: Stock[]) => void;
 }
@@ -50,9 +52,17 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const [sort, setSort] = useState<{sortBy: string, sortDir: "asc" | "desc"} | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const [, navigate] = useLocation();
 
   const fetchStocks = async ({ pageParam = 1 }) => {
-    const response = await fetch(`/api/stocks/search?page=${pageParam}&limit=50`);
+    const searchParams = new URLSearchParams({
+      page: pageParam.toString(),
+      limit: '50',
+      ...(filters.search && { search: filters.search }),
+      ...(filters.tradingApp && { tradingApp: filters.tradingApp })
+    });
+
+    const response = await fetch(`/api/stocks/search?${searchParams}`);
     if (!response.ok) throw new Error('Failed to fetch stocks');
     return response.json();
   };
@@ -160,7 +170,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }
 
   return (
-    <Card className="w-full">
+    <Card>
       <div className="w-full overflow-auto">
         <Table>
           <TableHeader>
@@ -195,23 +205,18 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   Volume <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('sector')} className="h-8 text-left font-medium">
-                  Sector <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredStocks.map((stock) => (
-              <TableRow key={stock.symbol} className="cursor-pointer hover:bg-muted/50">
-                <TableCell>
-                  <Link href={`/stock/${stock.symbol}`}>
-                    <a className="font-medium hover:underline flex items-center gap-2">
-                      {stock.symbol}
-                      {stock.isFavorite && <Star className="w-4 h-4 text-yellow-500" />}
-                    </a>
-                  </Link>
+              <TableRow 
+                key={stock.symbol} 
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => navigate(`/stock/${stock.symbol}`)}
+              >
+                <TableCell className="font-medium flex items-center gap-2">
+                  {stock.symbol}
+                  {stock.isFavorite && <Star className="w-4 h-4 text-yellow-500" />}
                 </TableCell>
                 <TableCell>{stock.name}</TableCell>
                 <TableCell>${stock.price.toFixed(2)}</TableCell>
@@ -233,7 +238,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   </Badge>
                 </TableCell>
                 <TableCell>{(stock.volume / 1_000_000).toFixed(1)}M</TableCell>
-                <TableCell>{stock.sector}</TableCell>
               </TableRow>
             ))}
           </TableBody>
