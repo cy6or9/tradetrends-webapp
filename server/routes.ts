@@ -107,13 +107,18 @@ async function searchAndFilterStocks(req: any, res: any) {
     const symbols = await fetchStockSymbols();
     log(`Found ${symbols.length} total stocks`, 'search');
 
+    // Filter symbols first if search is provided
+    const filteredSymbols = symbols.filter(symbol => 
+      !search || symbol.toLowerCase().includes(search)
+    );
+
     // Calculate pagination
     const startIndex = (page - 1) * limit;
     const endIndex = startIndex + limit;
-    const paginatedSymbols = symbols.slice(startIndex, endIndex);
+    const paginatedSymbols = filteredSymbols.slice(startIndex, endIndex);
 
     // Process stocks in batches
-    const stocks: any[] = [];
+    const stocks = [];
     for (let i = 0; i < paginatedSymbols.length; i += BATCH_SIZE) {
       const batch = paginatedSymbols.slice(i, i + BATCH_SIZE);
       const batchPromises = batch.map(symbol => fetchStockData(symbol));
@@ -125,26 +130,86 @@ async function searchAndFilterStocks(req: any, res: any) {
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
     }
 
-    // Apply filters
+    // Apply filters to fetched stocks
     const filteredStocks = stocks
-      .filter(stock => !search || 
-        stock.symbol.toLowerCase().includes(search) ||
-        stock.name.toLowerCase().includes(search)
-      )
-      .filter(stock => !industry || industry === 'Any' || stock.industry === industry)
-      .filter(stock => !exchange || exchange === 'Any' || stock.exchange === exchange)
-      .filter(stock => !tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp));
+      .filter(stock => 
+        (!search || 
+          stock.symbol.toLowerCase().includes(search) ||
+          stock.name.toLowerCase().includes(search)
+        ) &&
+        (!industry || industry === 'Any' || stock.industry === industry) &&
+        (!exchange || exchange === 'Any' || stock.exchange === exchange) &&
+        (!tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp))
+      );
 
     log(`Sending ${filteredStocks.length} stocks`, 'search');
     res.json({
       stocks: filteredStocks,
-      hasMore: endIndex < symbols.length,
-      total: symbols.length
+      hasMore: endIndex < filteredSymbols.length,
+      total: filteredSymbols.length
     });
   } catch (error) {
     log(`Search failed: ${error}`, 'error');
     res.status(500).json({ error: 'Failed to fetch stocks' });
   }
+}
+
+// Helper function for trading app filtering
+function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
+  return true; // For demo purposes, assume all stocks are available on all platforms
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  const httpServer = createServer(app);
+
+  const wss = new WebSocketServer({
+    server: httpServer,
+    path: '/ws',
+    perMessageDeflate: false
+  });
+
+  const clients = new Set<WebSocket>();
+
+  wss.on('connection', (ws: WebSocket) => {
+    log('Client connected', 'websocket');
+    clients.add(ws);
+
+    ws.on('close', () => {
+      clients.delete(ws);
+      log('Client disconnected', 'websocket');
+    });
+  });
+
+  // API routes
+  app.get("/api/stocks/search", searchAndFilterStocks);
+
+  app.get("/api/finnhub/calendar/ipo", async (_req: any, res: any) => {
+    try {
+      const response = await fetch(`${FINNHUB_API_URL}/calendar/ipo?token=${FINNHUB_API_KEY}`);
+      const data = await response.json();
+
+      if (!data || !data.ipoCalendar) {
+        return res.json([]);
+      }
+
+      res.json(data.ipoCalendar);
+    } catch (error) {
+      log(`IPO calendar error: ${error}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch IPO calendar' });
+    }
+  });
+
+  app.get("/api/finnhub/spacs", async (_req: any, res: any) => {
+    try {
+      const spacs = await fetchSpacList();
+      res.json(spacs);
+    } catch (error) {
+      log(`SPAC list error: ${error}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch SPAC list' });
+    }
+  });
+
+  return httpServer;
 }
 
 async function fetchSpacList(): Promise<any[]> {
@@ -192,61 +257,4 @@ async function fetchSpacList(): Promise<any[]> {
     log(`Error fetching SPAC list: ${error}`, 'error');
     return [];
   }
-}
-
-function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
-  // For demo purposes, assume all stocks are available on all platforms
-  return true;
-}
-
-export async function registerRoutes(app: Express): Promise<Server> {
-  const httpServer = createServer(app);
-
-  const wss = new WebSocketServer({
-    server: httpServer,
-    path: '/ws',
-    perMessageDeflate: false
-  });
-
-  const clients = new Set<WebSocket>();
-
-  wss.on('connection', (ws: WebSocket) => {
-    log('Client connected', 'websocket');
-    clients.add(ws);
-
-    ws.on('close', () => {
-      clients.delete(ws);
-      log('Client disconnected', 'websocket');
-    });
-  });
-
-  app.get("/api/stocks/search", searchAndFilterStocks);
-
-  app.get("/api/finnhub/calendar/ipo", async (_req: any, res: any) => {
-    try {
-      const response = await fetch(`${FINNHUB_API_URL}/calendar/ipo?token=${FINNHUB_API_KEY}`);
-      const data = await response.json();
-
-      if (!data || !data.ipoCalendar) {
-        return res.json([]);
-      }
-
-      res.json(data.ipoCalendar);
-    } catch (error) {
-      log(`IPO calendar error: ${error}`, 'error');
-      res.status(500).json({ error: 'Failed to fetch IPO calendar' });
-    }
-  });
-
-  app.get("/api/finnhub/spacs", async (_req: any, res: any) => {
-    try {
-      const spacs = await fetchSpacList();
-      res.json(spacs);
-    } catch (error) {
-      log(`SPAC list error: ${error}`, 'error');
-      res.status(500).json({ error: 'Failed to fetch SPAC list' });
-    }
-  });
-
-  return httpServer;
 }

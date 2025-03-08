@@ -50,7 +50,10 @@ const LoadingSpinner = () => (
 );
 
 export function StockList({ filters, setStocks }: StockListProps) {
-  const [sort, setSort] = useState<{sortBy: string, sortDir: "asc" | "desc"} | null>(null);
+  const [sort, setSort] = useState<{
+    key: keyof Stock;
+    direction: 'asc' | 'desc';
+  }>({ key: 'analystRating', direction: 'desc' });
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
@@ -60,9 +63,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
       page: pageParam.toString(),
       limit: '50',
       ...(filters.search && { search: filters.search }),
-      ...(filters.tradingApp && { tradingApp: filters.tradingApp }),
-      ...(filters.industry && { industry: filters.industry }),
-      ...(filters.exchange && { exchange: filters.exchange })
+      ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
+      ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
+      ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange })
     });
 
     const response = await fetch(`/api/stocks/search?${searchParams}`);
@@ -77,15 +80,21 @@ export function StockList({ filters, setStocks }: StockListProps) {
     isFetchingNextPage,
     isLoading,
     isError,
+    refetch
   } = useInfiniteQuery({
     queryKey: ["/api/stocks", filters],
     queryFn: fetchStocks,
     getNextPageParam: (lastPage) => {
-      return lastPage.hasMore ? lastPage.total / 50 + 1 : undefined;
+      if (!lastPage.hasMore) return undefined;
+      return lastPage.total > (lastPage.stocks?.length || 0) ? Math.ceil(lastPage.stocks.length / 50) + 1 : undefined;
     },
     staleTime: 30000,
     initialPageParam: 1,
   });
+
+  useEffect(() => {
+    refetch();
+  }, [filters, refetch]);
 
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
     const [target] = entries;
@@ -111,10 +120,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
     };
   }, [handleObserver]);
 
-  const handleSort = (sortBy: string) => {
+  const handleSort = (key: keyof Stock) => {
     setSort(current => ({
-      sortBy,
-      sortDir: current?.sortBy === sortBy && current.sortDir === "asc" ? "desc" : "asc"
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
     }));
   };
 
@@ -136,29 +145,25 @@ export function StockList({ filters, setStocks }: StockListProps) {
       return true;
     });
 
-  // Sort stocks if sorting is active
-  if (sort) {
-    filteredStocks.sort((a, b) => {
-      const aVal = a[sort.sortBy as keyof Stock];
-      const bVal = b[sort.sortBy as keyof Stock];
-      const modifier = sort.sortDir === "asc" ? 1 : -1;
+  // Sort stocks
+  const sortedStocks = [...filteredStocks].sort((a, b) => {
+    const aVal = a[sort.key];
+    const bVal = b[sort.key];
+    const modifier = sort.direction === 'asc' ? 1 : -1;
 
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return (aVal - bVal) * modifier;
-      }
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return aVal.localeCompare(bVal) * modifier;
-      }
-      return 0;
-    });
-  }
+    if (typeof aVal === 'number' && typeof bVal === 'number') {
+      return (aVal - bVal) * modifier;
+    }
+    if (typeof aVal === 'string' && typeof bVal === 'string') {
+      return aVal.localeCompare(bVal) * modifier;
+    }
+    return 0;
+  });
 
   // Update parent component with stock count
   useEffect(() => {
-    if (filteredStocks.length) {
-      setStocks?.(filteredStocks);
-    }
-  }, [filteredStocks, setStocks]);
+    setStocks?.(sortedStocks);
+  }, [sortedStocks, setStocks]);
 
   if (isError) {
     return (
@@ -172,7 +177,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return <LoadingSpinner />;
   }
 
-  if (!filteredStocks.length) {
+  if (!sortedStocks.length) {
     return (
       <div className="p-8 text-center text-muted-foreground">
         No stocks found matching your criteria.
@@ -219,7 +224,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredStocks.map((stock) => (
+            {sortedStocks.map((stock) => (
               <TableRow
                 key={stock.symbol}
                 className="cursor-pointer hover:bg-muted/50"
