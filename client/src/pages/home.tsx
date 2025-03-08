@@ -34,7 +34,7 @@ export default function Home() {
   const [filters, setFilters] = useState({});
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("stocks");
-  const [stocks, setStocks] = useState<any[]>([]); // Added state for stocks
+  const [stocks, setStocks] = useState<any[]>([]);
 
   // Hot stocks filter - stocks with high analyst ratings and recent movement
   const hotStocksFilter = {
@@ -59,7 +59,7 @@ export default function Home() {
       {/* Filters in sliding menu */}
       <SlidingMenu isOpen={isMenuOpen} onToggle={() => setIsMenuOpen(!isMenuOpen)}>
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Filters & Sorting</h2>
+          <h2 className="text-lg font-semibold text-cyan-500">Filters & Sorting</h2>
           <StockFilters onFilterChange={setFilters} />
         </div>
       </SlidingMenu>
@@ -71,8 +71,8 @@ export default function Home() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle className="text-4xl font-bold">TradeTrends</CardTitle>
-                  <p className="text-muted-foreground mt-2">
+                  <CardTitle className="text-4xl font-bold">Trade<span className="text-cyan-500">Trends</span></CardTitle>
+                  <p className="text-cyan-500 mt-2">
                     Advanced stock market analysis filtering & trending trade data tracker for better investing
                   </p>
                 </div>
@@ -83,15 +83,8 @@ export default function Home() {
             </CardHeader>
           </Card>
 
-          {/* Main stock list - all traceable stocks */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">All Stocks</h2>
-            <StockList filters={filters} setStocks={setStocks} />
-          </div>
-
           {/* Market sections */}
-          <div className="mt-8">
-            <h2 className="text-xl font-semibold mb-4">Market Activity</h2>
+          <div className="w-full">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="stocks">Hot Stocks</TabsTrigger>
@@ -120,6 +113,12 @@ export default function Home() {
                 </div>
               </TabsContent>
             </Tabs>
+          </div>
+
+          {/* Main stock list - all traceable stocks */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">All Stocks</h2>
+            <StockList filters={filters} setStocks={setStocks} />
           </div>
         </div>
       </div>

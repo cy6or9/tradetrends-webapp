@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 const filterSchema = z.object({
   minPrice: z.string().optional(),
@@ -78,7 +79,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
 
   return (
     <Form {...form}>
-      <form 
+      <form
         onChange={() => onFilterChange(form.getValues())}
         className="space-y-4"
       >
@@ -90,7 +91,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Min Price</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="0" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -103,7 +109,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Max Price</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="1000" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="1000"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -116,7 +127,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Min Change %</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="-10" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="-10"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -129,7 +145,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Max Change %</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="10" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="10"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -142,7 +163,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Min Analyst Rating</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="75" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="75"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -155,7 +181,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Min Volume (M)</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="0" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -168,7 +199,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Max Volume (M)</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="1000" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="1000"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -181,7 +217,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Min Market Cap (B)</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="0" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -194,7 +235,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Max Market Cap (B)</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="1000" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="1000"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -207,7 +253,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Min Beta</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="0" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -220,7 +271,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               <FormItem>
                 <FormLabel>Max Beta</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="3" {...field} />
+                  <Input
+                    type="number"
+                    placeholder="3"
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -237,7 +293,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                   value={field.value?.[0]}
                 >
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
                       <SelectValue placeholder="Select sector" />
                     </SelectTrigger>
                   </FormControl>
@@ -264,7 +320,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                   value={field.value?.[0]}
                 >
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
                       <SelectValue placeholder="Select industry" />
                     </SelectTrigger>
                   </FormControl>
@@ -288,14 +344,16 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                 <FormLabel>Sort By</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
                       <SelectValue placeholder="Choose field" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="price">Price</SelectItem>
                     <SelectItem value="changePercent">Change %</SelectItem>
-                    <SelectItem value="analystRating">Analyst Rating</SelectItem>
+                    <SelectItem value="analystRating">
+                      Analyst Rating
+                    </SelectItem>
                     <SelectItem value="volume">Volume</SelectItem>
                     <SelectItem value="marketCap">Market Cap</SelectItem>
                     <SelectItem value="beta">Beta</SelectItem>
@@ -313,7 +371,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                 <FormLabel>Sort Direction</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
                       <SelectValue placeholder="Choose direction" />
                     </SelectTrigger>
                   </FormControl>
@@ -327,10 +385,10 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
           />
         </div>
 
-        <Button 
-          type="reset" 
+        <Button
+          type="reset"
           variant="outline"
-          className="w-full"
+          className="w-full hover:bg-cyan-500/10 hover:text-cyan-500 border-cyan-500/20"
           onClick={() => {
             form.reset();
             onFilterChange({});
