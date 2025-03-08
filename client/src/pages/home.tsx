@@ -7,7 +7,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { SlidingMenu } from "@/components/sliding-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Menu, ChevronRight } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { IpoCalendar } from "@/components/ipo-calendar";
 import { SpacList } from "@/components/spac-list";
@@ -52,7 +52,6 @@ export default function Home() {
         onClick={() => setIsMenuOpen(!isMenuOpen)}
       >
         <Menu className="h-4 w-4" />
-        <ChevronRight className={`h-4 w-4 transition-transform ${isMenuOpen ? "rotate-180" : ""}`} />
       </Button>
 
       {/* Filters in sliding menu */}
@@ -65,7 +64,7 @@ export default function Home() {
 
       {/* Main content */}
       <div className={`transition-all duration-200 ${isMenuOpen ? "lg:ml-[350px]" : "lg:ml-[350px]"}`}>
-        <div className="container p-4 space-y-6">
+        <div className="container mx-auto p-4 space-y-3 max-w-[100vw] overflow-x-hidden">
           <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
@@ -91,23 +90,23 @@ export default function Home() {
                 <TabsTrigger value="stocks" className="text-cyan-500">Hot Stocks</TabsTrigger>
               </TabsList>
 
-              <div className="h-[500px] overflow-hidden">
+              <div className="h-[min(400px,50vh)] overflow-hidden">
                 <div className="h-full overflow-y-auto">
                   <TabsContent value="ipo" className="m-0">
-                    <div className="mt-4">
+                    <div className="mt-2">
                       <IpoCalendar />
                     </div>
                   </TabsContent>
 
                   <TabsContent value="spacs" className="m-0">
-                    <div className="mt-4">
+                    <div className="mt-2">
                       <SpacList />
                     </div>
                   </TabsContent>
 
                   <TabsContent value="stocks" className="m-0">
-                    <div className="mt-4">
-                      <p className="text-sm text-cyan-500 mb-4">
+                    <div className="mt-2">
+                      <p className="text-sm text-cyan-500 mb-2">
                         Trending stocks with high analyst ratings (80%+) and significant price movement today
                       </p>
                       <StockList filters={hotStocksFilter} setStocks={setStocks} />
@@ -119,8 +118,8 @@ export default function Home() {
           </div>
 
           {/* Main stock list - all traceable stocks */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-cyan-500">All Stocks</h2>
+          <div className="mt-2">
+            <h2 className="text-xl font-semibold text-cyan-500 mb-2">All Stocks</h2>
             <StockList filters={filters} setStocks={setStocks} />
           </div>
         </div>

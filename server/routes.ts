@@ -10,6 +10,12 @@ import { storage } from "./storage";
 import { insertStockSchema, insertFavoriteSchema } from "@shared/schema";
 import { ZodError } from "zod";
 
+// Add this near the top after imports
+function log(message: string, source = 'server') {
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`[${timestamp}] [${source}]: ${message}`);
+}
+
 // Finnhub API configuration
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
@@ -34,10 +40,6 @@ const stockCache = new Map<string, { data: any; timestamp: number }>();
 // Store connected clients
 const clients = new Set<WebSocket>();
 
-function log(message: string, source = 'server') {
-  const timestamp = new Date().toLocaleTimeString();
-  console.log(`[${timestamp}] [${source}]: ${message}`);
-}
 
 async function refreshStockData(endpoint: string): Promise<any> {
   try {
@@ -127,7 +129,6 @@ async function searchAndFilterStocks(req: any, res: any) {
       );
 
     log(`Filtered to ${activeStocks.length} active stocks`, 'search');
-
     const stocks = [];
     // Process stocks in parallel batches
     const batches = [];
@@ -237,7 +238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     perMessageDeflate: false
   });
 
-  // WebSocket connection handling
+  // Update the WebSocket connection handling
   wss.on('connection', (ws: WebSocket) => {
     log('Client connected', 'websocket');
     clients.add(ws);
