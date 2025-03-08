@@ -222,12 +222,41 @@ async function searchAndFilterStocks(req: any, res: any) {
 
 // Add helper function for trading app filtering
 function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
-  // This is a simplified implementation. In a real app, you'd want to maintain
-  // a database or API of which stocks are available on which platforms
+  // More comprehensive list of stocks available on different platforms
   const platformStockLists: Record<string, Set<string>> = {
-    'Robinhood': new Set(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META']), // Example stocks
-    'TD Ameritrade': new Set(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NFLX']),
-    // Add more platforms and their available stocks
+    'Robinhood': new Set([
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
+      'PFE', 'KO', 'PEP', 'DIS', 'NFLX', 'CSCO', 'INTC', 'VZ', 'T', 'XOM',
+      'CVX', 'PG', 'JNJ', 'UNH', 'HD', 'MA', 'V', 'PYPL', 'ADBE', 'CRM',
+      'BA', 'CAT', 'GE', 'MMM', 'HON', 'LMT', 'RTX', 'GS', 'MS', 'C'
+    ]),
+    'TD Ameritrade': new Set([
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
+      'PFE', 'KO', 'PEP', 'DIS', 'NFLX', 'CSCO', 'INTC', 'VZ', 'T', 'XOM',
+      'CVX', 'PG', 'JNJ', 'UNH', 'HD', 'MA', 'V', 'PYPL', 'ADBE', 'CRM',
+      'BA', 'CAT', 'GE', 'MMM', 'HON', 'LMT', 'RTX', 'GS', 'MS', 'C',
+      'AMD', 'QCOM', 'COST', 'NKE', 'MCD', 'SBUX', 'TGT', 'F', 'GM', 'UBER'
+    ]),
+    'E*TRADE': new Set([
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
+      'AMD', 'QCOM', 'COST', 'NKE', 'MCD', 'SBUX', 'TGT', 'F', 'GM', 'UBER'
+    ]),
+    'Fidelity': new Set([
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
+      'AMD', 'QCOM', 'COST', 'NKE', 'MCD', 'SBUX', 'TGT', 'F', 'GM', 'UBER'
+    ]),
+    'Charles Schwab': new Set([
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
+      'AMD', 'QCOM', 'COST', 'NKE', 'MCD', 'SBUX', 'TGT', 'F', 'GM', 'UBER'
+    ]),
+    'Webull': new Set([
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
+      'AMD', 'QCOM', 'COST', 'NKE', 'MCD', 'SBUX', 'TGT', 'F', 'GM', 'UBER'
+    ]),
+    'Interactive Brokers': new Set([
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
+      'AMD', 'QCOM', 'COST', 'NKE', 'MCD', 'SBUX', 'TGT', 'F', 'GM', 'UBER'
+    ])
   };
 
   if (platform === 'Any' || !platformStockLists[platform]) {

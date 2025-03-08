@@ -128,7 +128,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
     if (filters.minBeta && stock.beta < filters.minBeta) return false;
     if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
-    if (filters.sectors?.length && !filters.sectors.includes(stock.sector)) return false;
     if (filters.industries?.length && !filters.industries.includes(stock.industry)) return false;
     return true;
   });
@@ -209,8 +208,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
           </TableHeader>
           <TableBody>
             {filteredStocks.map((stock) => (
-              <TableRow 
-                key={stock.symbol} 
+              <TableRow
+                key={stock.symbol}
                 className="cursor-pointer hover:bg-muted/50"
                 onClick={() => navigate(`/stock/${stock.symbol}`)}
               >
@@ -237,7 +236,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                     {stock.analystRating}%
                   </Badge>
                 </TableCell>
-                <TableCell>{(stock.volume / 1_000_000).toFixed(1)}M</TableCell>
+                <TableCell>{stock.volume.toLocaleString()}</TableCell>
               </TableRow>
             ))}
           </TableBody>
