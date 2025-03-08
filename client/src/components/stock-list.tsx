@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import {
@@ -14,7 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Star, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Stock } from "@shared/schema";
-import { getAllUsStocks } from "@/lib/finnhub";
 
 interface StockListProps {
   filters: {
@@ -34,10 +33,9 @@ interface StockListProps {
     sortBy?: string;
     sortDir?: "asc" | "desc";
   };
-  setStocks?: (stocks: any[]) => void;
+  setStocks?: (stocks: Stock[]) => void;
 }
 
-// Add optimized loading handling
 const LoadingSpinner = () => (
   <div className="p-8 text-center text-muted-foreground">
     <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
@@ -49,14 +47,54 @@ const LoadingSpinner = () => (
 );
 
 export function StockList({ filters, setStocks }: StockListProps) {
-  const { data: stocks, isLoading } = useQuery({
+  const [sort, setSort] = useState<{sortBy: string, sortDir: "asc" | "desc"} | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  const fetchStocks = async ({ pageParam = 1 }) => {
+    const response = await fetch(`/api/stocks/search?page=${pageParam}&limit=50`);
+    if (!response.ok) throw new Error('Failed to fetch stocks');
+    return response.json();
+  };
+
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery({
     queryKey: ["/api/stocks", filters],
-    queryFn: getAllUsStocks,
+    queryFn: fetchStocks,
+    getNextPageParam: (lastPage, pages) => {
+      return lastPage.hasMore ? pages.length + 1 : undefined;
+    },
     staleTime: 30000, // Consider data fresh for 30 seconds
-    cacheTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
-  const [sort, setSort] = useState<{sortBy: string, sortDir: "asc" | "desc"} | null>(null);
+  const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
+    const [target] = entries;
+    if (target.isIntersecting && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  useEffect(() => {
+    const element = loadMoreRef.current;
+    if (!element) return;
+
+    observerRef.current = new IntersectionObserver(handleObserver, {
+      threshold: 0.1,
+    });
+
+    observerRef.current.observe(element);
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [handleObserver]);
 
   const handleSort = (sortBy: string) => {
     if (sort && sort.sortBy === sortBy) {
@@ -64,28 +102,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
     } else {
       setSort({sortBy, sortDir: "asc"});
     }
-  }
+  };
 
-  // Update parent component with stock count when data changes
-  useEffect(() => {
-    if (stocks?.length) {
-      setStocks?.(stocks);
-    }
-  }, [stocks, setStocks]);
-
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (!stocks?.length) {
-    return (
-      <div className="p-8 text-center text-muted-foreground">
-        No stocks found matching your criteria.
-      </div>
-    );
-  }
-
-  const filteredStocks = stocks.filter((stock) => {
+  // Flatten and filter all stocks from all pages
+  const allStocks = data?.pages.flatMap(page => page.stocks) ?? [];
+  const filteredStocks = allStocks.filter((stock) => {
     if (filters.minPrice && stock.price < filters.minPrice) return false;
     if (filters.maxPrice && stock.price > filters.maxPrice) return false;
     if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
@@ -102,23 +123,38 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return true;
   });
 
-  // Type-safe sorting
+  // Update parent component with stock count
+  useEffect(() => {
+    if (filteredStocks.length) {
+      setStocks?.(filteredStocks);
+    }
+  }, [filteredStocks, setStocks]);
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!filteredStocks.length) {
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        No stocks found matching your criteria.
+      </div>
+    );
+  }
+
+  // Sort stocks if sorting is active
   if (sort && sort.sortBy) {
     filteredStocks.sort((a, b) => {
       const aVal = a[sort.sortBy as keyof Stock];
       const bVal = b[sort.sortBy as keyof Stock];
+      const modifier = sort.sortDir === "asc" ? 1 : -1;
 
       if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sort.sortDir === "asc" ? aVal - bVal : bVal - aVal;
+        return (aVal - bVal) * modifier;
       }
-
-      // Handle string comparison
       if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sort.sortDir === "asc"
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal);
+        return aVal.localeCompare(bVal) * modifier;
       }
-
       return 0;
     });
   }
@@ -199,6 +235,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
             ))}
           </TableBody>
         </Table>
+
+        {/* Loading indicator and intersection observer target */}
+        <div ref={loadMoreRef} className="py-4 text-center">
+          {isFetchingNextPage && (
+            <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
+          )}
+        </div>
       </div>
     </Card>
   );

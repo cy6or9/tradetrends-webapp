@@ -105,9 +105,11 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
   throw lastError;
 }
 
-// Update the searchAndFilterStocks function to use progressive loading
+// Update the searchAndFilterStocks function
 async function searchAndFilterStocks(req: any, res: any) {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
     log('Starting stock search...', 'search');
     const symbols = await finnhubRequest('/stock/symbol?exchange=US');
 
@@ -118,9 +120,8 @@ async function searchAndFilterStocks(req: any, res: any) {
 
     log(`Got ${symbols.length} symbols`, 'search');
 
-    // Filter active stocks and limit initial load
+    // Filter active stocks
     const activeStocks = symbols
-      .slice(0, 200) // Load first 200 stocks initially
       .filter(stock => stock.type === 'Common Stock')
       .filter(stock => !req.query.exchange || stock.exchange === req.query.exchange)
       .filter(stock => !req.query.query ||
@@ -129,11 +130,17 @@ async function searchAndFilterStocks(req: any, res: any) {
       );
 
     log(`Filtered to ${activeStocks.length} active stocks`, 'search');
+
+    // Calculate pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    const paginatedStocks = activeStocks.slice(startIndex, endIndex);
+
     const stocks = [];
     // Process stocks in parallel batches
     const batches = [];
-    for (let i = 0; i < activeStocks.length; i += BATCH_SIZE) {
-      const batch = activeStocks.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < paginatedStocks.length; i += BATCH_SIZE) {
+      const batch = paginatedStocks.slice(i, i + BATCH_SIZE);
       batches.push(batch);
     }
 
@@ -197,7 +204,11 @@ async function searchAndFilterStocks(req: any, res: any) {
     );
 
     log(`Sending ${stocks.length} stocks`, 'search');
-    res.json(stocks);
+    res.json({
+      stocks,
+      hasMore: endIndex < activeStocks.length,
+      total: activeStocks.length
+    });
   } catch (error) {
     log(`Search failed: ${error}`, 'error');
     res.status(500).json({ error: 'Failed to fetch stocks' });
