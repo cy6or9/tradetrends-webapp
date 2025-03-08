@@ -110,6 +110,9 @@ async function searchAndFilterStocks(req: any, res: any) {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
+    const search = req.query.search?.toLowerCase();
+    const exchange = req.query.exchange;
+
     log('Starting stock search...', 'search');
     const symbols = await finnhubRequest('/stock/symbol?exchange=US');
 
@@ -123,10 +126,10 @@ async function searchAndFilterStocks(req: any, res: any) {
     // Filter active stocks
     const activeStocks = symbols
       .filter(stock => stock.type === 'Common Stock')
-      .filter(stock => !req.query.exchange || stock.exchange === req.query.exchange)
-      .filter(stock => !req.query.query ||
-        stock.symbol.toLowerCase().includes(req.query.query.toString().toLowerCase()) ||
-        stock.description.toLowerCase().includes(req.query.query.toString().toLowerCase())
+      .filter(stock => !exchange || exchange === 'Any' || stock.exchange === exchange)
+      .filter(stock => !search ||
+        stock.symbol.toLowerCase().includes(search) ||
+        stock.description.toLowerCase().includes(search)
       );
 
     log(`Filtered to ${activeStocks.length} active stocks`, 'search');

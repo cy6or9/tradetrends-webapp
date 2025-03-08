@@ -204,10 +204,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
           </TableHeader>
           <TableBody>
             {filteredStocks.map((stock) => (
-              <TableRow key={stock.symbol}>
+              <TableRow key={stock.symbol} className="cursor-pointer hover:bg-muted/50">
                 <TableCell>
                   <Link href={`/stock/${stock.symbol}`}>
-                    <a className="font-medium hover:underline">{stock.symbol}</a>
+                    <a className="font-medium hover:underline flex items-center gap-2">
+                      {stock.symbol}
+                      {stock.isFavorite && <Star className="w-4 h-4 text-yellow-500" />}
+                    </a>
                   </Link>
                 </TableCell>
                 <TableCell>{stock.name}</TableCell>

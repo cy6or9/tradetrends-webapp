@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const filterSchema = z.object({
+  search: z.string().optional(),
   minPrice: z.string().optional(),
   maxPrice: z.string().optional(),
   minChangePercent: z.string().optional(),
@@ -33,6 +34,7 @@ const filterSchema = z.object({
   maxBeta: z.string().optional(),
   sectors: z.array(z.string()).optional(),
   industries: z.array(z.string()).optional(),
+  exchange: z.string().optional(),
   sortBy: z.string().optional(),
   sortDir: z.enum(["asc", "desc"]).optional(),
 });
@@ -42,6 +44,14 @@ type FilterValues = z.infer<typeof filterSchema>;
 interface StockFiltersProps {
   onFilterChange: (filters: FilterValues) => void;
 }
+
+const EXCHANGES = [
+  "Any",
+  "NYSE",
+  "NASDAQ",
+  "AMEX",
+  "OTC",
+];
 
 const SECTORS = [
   "Technology",
@@ -72,8 +82,10 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
   const form = useForm<FilterValues>({
     resolver: zodResolver(filterSchema),
     defaultValues: {
+      minPrice: "0.03",
+      sortBy: "analystRating",
       sortDir: "desc",
-      minAnalystRating: "75",
+      exchange: "Any",
     },
   });
 
@@ -86,6 +98,51 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
         <div className="space-y-4">
           <FormField
             control={form.control}
+            name="search"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-cyan-500">Search Stocks</FormLabel>
+                <FormControl>
+                  <Input
+                    type="text"
+                    placeholder="Search by symbol or name..."
+                    {...field}
+                    className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="exchange"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-cyan-500">Market</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
+                      <SelectValue placeholder="Select market" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {EXCHANGES.map((exchange) => (
+                      <SelectItem key={exchange} value={exchange}>
+                        {exchange}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="minPrice"
             render={({ field }) => (
               <FormItem>
@@ -93,7 +150,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                 <FormControl>
                   <Input
                     type="number"
-                    placeholder="0"
+                    placeholder="0.03"
                     {...field}
                     className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
                   />
@@ -349,11 +406,9 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    <SelectItem value="analystRating">Analyst Rating</SelectItem>
                     <SelectItem value="price">Price</SelectItem>
                     <SelectItem value="changePercent">Change %</SelectItem>
-                    <SelectItem value="analystRating">
-                      Analyst Rating
-                    </SelectItem>
                     <SelectItem value="volume">Volume</SelectItem>
                     <SelectItem value="marketCap">Market Cap</SelectItem>
                     <SelectItem value="beta">Beta</SelectItem>
@@ -390,8 +445,18 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
           variant="outline"
           className="w-full hover:bg-cyan-500/10 hover:text-cyan-500 border-cyan-500/20"
           onClick={() => {
-            form.reset();
-            onFilterChange({});
+            form.reset({
+              minPrice: "0.03",
+              sortBy: "analystRating",
+              sortDir: "desc",
+              exchange: "Any",
+            });
+            onFilterChange({
+              minPrice: "0.03",
+              sortBy: "analystRating",
+              sortDir: "desc",
+              exchange: "Any",
+            });
           }}
         >
           Reset Filters
