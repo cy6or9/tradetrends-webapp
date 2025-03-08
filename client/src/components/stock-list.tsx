@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -124,84 +124,82 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }
 
   return (
-    <Card>
-      <CardContent className="p-0 overflow-x-auto">
-        <div className="w-full min-w-[800px]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
-                    Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
-                    Name <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium">
-                    Price <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium">
-                    Change % <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium">
-                    Analyst Rating <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium">
-                    Volume <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('sector')} className="h-8 text-left font-medium">
-                    Sector <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
+    <Card className="w-full">
+      <div className="w-full overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
+                  Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
+                  Name <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium">
+                  Price <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium">
+                  Change % <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium">
+                  Analyst Rating <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium">
+                  Volume <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('sector')} className="h-8 text-left font-medium">
+                  Sector <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredStocks.map((stock) => (
+              <TableRow key={stock.symbol}>
+                <TableCell>
+                  <Link href={`/stock/${stock.symbol}`}>
+                    <a className="font-medium hover:underline">{stock.symbol}</a>
+                  </Link>
+                </TableCell>
+                <TableCell>{stock.name}</TableCell>
+                <TableCell>${stock.price.toFixed(2)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    {stock.changePercent > 0 ? (
+                      <TrendingUp className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <TrendingDown className="w-4 h-4 text-red-500" />
+                    )}
+                    <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
+                      {stock.changePercent.toFixed(2)}%
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
+                    {stock.analystRating}%
+                  </Badge>
+                </TableCell>
+                <TableCell>{(stock.volume / 1_000_000).toFixed(1)}M</TableCell>
+                <TableCell>{stock.sector}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredStocks.map((stock) => (
-                <TableRow key={stock.symbol}>
-                  <TableCell>
-                    <Link href={`/stock/${stock.symbol}`}>
-                      <a className="font-medium hover:underline">{stock.symbol}</a>
-                    </Link>
-                  </TableCell>
-                  <TableCell>{stock.name}</TableCell>
-                  <TableCell>${stock.price.toFixed(2)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      {stock.changePercent > 0 ? (
-                        <TrendingUp className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <TrendingDown className="w-4 h-4 text-red-500" />
-                      )}
-                      <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
-                        {stock.changePercent.toFixed(2)}%
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
-                      {stock.analystRating}%
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{(stock.volume / 1_000_000).toFixed(1)}M</TableCell>
-                  <TableCell>{stock.sector}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </Card>
   );
 }

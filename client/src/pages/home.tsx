@@ -66,7 +66,7 @@ export default function Home() {
 
       {/* Main content */}
       <div className={`transition-all duration-200 ${isMenuOpen ? "lg:ml-[350px]" : "lg:ml-[350px]"}`}>
-        <div className="container mx-auto p-4 space-y-6 max-w-[100vw] overflow-x-hidden">
+        <div className="container p-4 space-y-6">
           <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
