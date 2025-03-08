@@ -58,58 +58,56 @@ export function SpacList() {
 
   return (
     <Card>
-      <CardContent className="p-0 overflow-x-auto">
-        <div className="w-full min-w-[800px]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
-                    Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
-                    Name <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('status')} className="h-8 text-left font-medium">
-                    Status <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('trustValue')} className="h-8 text-left font-medium">
-                    Trust Value <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('targetCompany')} className="h-8 text-left font-medium">
-                    Target Company <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('exchange')} className="h-8 text-left font-medium">
-                    Exchange <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
+      <div className="w-full overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
+                  Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
+                  Name <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('status')} className="h-8 text-left font-medium">
+                  Status <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('trustValue')} className="h-8 text-left font-medium">
+                  Trust Value <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('targetCompany')} className="h-8 text-left font-medium">
+                  Target Company <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('exchange')} className="h-8 text-left font-medium">
+                  Exchange <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedSpacs.map((spac) => (
+              <TableRow key={spac.symbol}>
+                <TableCell className="font-medium">{spac.symbol}</TableCell>
+                <TableCell>{spac.name}</TableCell>
+                <TableCell>{spac.status}</TableCell>
+                <TableCell>${spac.trustValue.toLocaleString()}</TableCell>
+                <TableCell>{spac.targetCompany || "Searching"}</TableCell>
+                <TableCell>{spac.exchange}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedSpacs.map((spac) => (
-                <TableRow key={spac.symbol}>
-                  <TableCell className="font-medium">{spac.symbol}</TableCell>
-                  <TableCell>{spac.name}</TableCell>
-                  <TableCell>{spac.status}</TableCell>
-                  <TableCell>${spac.trustValue.toLocaleString()}</TableCell>
-                  <TableCell>{spac.targetCompany || "Searching"}</TableCell>
-                  <TableCell>{spac.exchange}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </Card>
   );
 }

@@ -89,7 +89,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="minPrice"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Min Price</FormLabel>
+                <FormLabel className="text-cyan-500">Min Price</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -107,7 +107,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="maxPrice"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Max Price</FormLabel>
+                <FormLabel className="text-cyan-500">Max Price</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -125,7 +125,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="minChangePercent"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Min Change %</FormLabel>
+                <FormLabel className="text-cyan-500">Min Change %</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -143,7 +143,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="maxChangePercent"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Max Change %</FormLabel>
+                <FormLabel className="text-cyan-500">Max Change %</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -161,7 +161,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="minAnalystRating"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Min Analyst Rating</FormLabel>
+                <FormLabel className="text-cyan-500">Min Analyst Rating</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -179,7 +179,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="minVolume"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Min Volume (M)</FormLabel>
+                <FormLabel className="text-cyan-500">Min Volume (M)</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -197,7 +197,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="maxVolume"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Max Volume (M)</FormLabel>
+                <FormLabel className="text-cyan-500">Max Volume (M)</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -215,7 +215,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="minMarketCap"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Min Market Cap (B)</FormLabel>
+                <FormLabel className="text-cyan-500">Min Market Cap (B)</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -233,7 +233,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="maxMarketCap"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Max Market Cap (B)</FormLabel>
+                <FormLabel className="text-cyan-500">Max Market Cap (B)</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -251,7 +251,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="minBeta"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Min Beta</FormLabel>
+                <FormLabel className="text-cyan-500">Min Beta</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -269,7 +269,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="maxBeta"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Max Beta</FormLabel>
+                <FormLabel className="text-cyan-500">Max Beta</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -287,7 +287,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="sectors"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Sector</FormLabel>
+                <FormLabel className="text-cyan-500">Sector</FormLabel>
                 <Select
                   onValueChange={(value) => field.onChange([value])}
                   value={field.value?.[0]}
@@ -314,7 +314,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="industries"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Industry</FormLabel>
+                <FormLabel className="text-cyan-500">Industry</FormLabel>
                 <Select
                   onValueChange={(value) => field.onChange([value])}
                   value={field.value?.[0]}
@@ -341,7 +341,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="sortBy"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Sort By</FormLabel>
+                <FormLabel className="text-cyan-500">Sort By</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">
@@ -368,7 +368,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             name="sortDir"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Sort Direction</FormLabel>
+                <FormLabel className="text-cyan-500">Sort Direction</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger className="border-cyan-500/20 focus:ring-cyan-500/20">

@@ -58,58 +58,56 @@ export function IpoCalendar() {
 
   return (
     <Card>
-      <CardContent className="p-0 overflow-x-auto">
-        <div className="w-full min-w-[800px]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
-                    Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
-                    Company <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('date')} className="h-8 text-left font-medium">
-                    Date <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium">
-                    Price Range <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('shares')} className="h-8 text-left font-medium">
-                    Shares <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort('exchange')} className="h-8 text-left font-medium">
-                    Exchange <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
+      <div className="w-full overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
+                  Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
+                  Company <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('date')} className="h-8 text-left font-medium">
+                  Date <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium">
+                  Price Range <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('shares')} className="h-8 text-left font-medium">
+                  Shares <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('exchange')} className="h-8 text-left font-medium">
+                  Exchange <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedEvents.map((ipo) => (
+              <TableRow key={ipo.symbol}>
+                <TableCell className="font-medium">{ipo.symbol}</TableCell>
+                <TableCell>{ipo.name}</TableCell>
+                <TableCell>{new Date(ipo.date).toLocaleDateString()}</TableCell>
+                <TableCell>${ipo.price?.toLocaleString() || "TBA"}</TableCell>
+                <TableCell>{ipo.shares ? `${ipo.shares.toLocaleString()} shares` : "TBA"}</TableCell>
+                <TableCell>{ipo.exchange}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedEvents.map((ipo) => (
-                <TableRow key={ipo.symbol}>
-                  <TableCell className="font-medium">{ipo.symbol}</TableCell>
-                  <TableCell>{ipo.name}</TableCell>
-                  <TableCell>{new Date(ipo.date).toLocaleDateString()}</TableCell>
-                  <TableCell>${ipo.price?.toLocaleString() || "TBA"}</TableCell>
-                  <TableCell>{ipo.shares ? `${ipo.shares.toLocaleString()} shares` : "TBA"}</TableCell>
-                  <TableCell>{ipo.exchange}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </Card>
   );
 }

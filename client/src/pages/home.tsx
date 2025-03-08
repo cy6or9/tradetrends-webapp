@@ -12,7 +12,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { IpoCalendar } from "@/components/ipo-calendar";
 import { SpacList } from "@/components/spac-list";
 
-// Separate component for WebSocket status to isolate potential errors
 function WebSocketStatus({ stockCount }: { stockCount: number }) {
   const { isConnected } = useWebSocket();
 
@@ -87,37 +86,41 @@ export default function Home() {
           <div className="w-full">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="w-full justify-start">
-                <TabsTrigger value="stocks">Hot Stocks</TabsTrigger>
-                <TabsTrigger value="ipo">IPO Calendar</TabsTrigger>
-                <TabsTrigger value="spacs">SPACs</TabsTrigger>
+                <TabsTrigger value="ipo" className="text-cyan-500">IPO Calendar</TabsTrigger>
+                <TabsTrigger value="spacs" className="text-cyan-500">SPACs</TabsTrigger>
+                <TabsTrigger value="stocks" className="text-cyan-500">Hot Stocks</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="stocks">
-                <div className="mt-4">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Trending stocks with high analyst ratings (80%+) and significant price movement today
-                  </p>
-                  <StockList filters={hotStocksFilter} setStocks={setStocks} />
-                </div>
-              </TabsContent>
+              <div className="h-[500px] overflow-hidden">
+                <div className="h-full overflow-y-auto">
+                  <TabsContent value="ipo" className="m-0">
+                    <div className="mt-4">
+                      <IpoCalendar />
+                    </div>
+                  </TabsContent>
 
-              <TabsContent value="ipo">
-                <div className="mt-4">
-                  <IpoCalendar />
-                </div>
-              </TabsContent>
+                  <TabsContent value="spacs" className="m-0">
+                    <div className="mt-4">
+                      <SpacList />
+                    </div>
+                  </TabsContent>
 
-              <TabsContent value="spacs">
-                <div className="mt-4">
-                  <SpacList />
+                  <TabsContent value="stocks" className="m-0">
+                    <div className="mt-4">
+                      <p className="text-sm text-cyan-500 mb-4">
+                        Trending stocks with high analyst ratings (80%+) and significant price movement today
+                      </p>
+                      <StockList filters={hotStocksFilter} setStocks={setStocks} />
+                    </div>
+                  </TabsContent>
                 </div>
-              </TabsContent>
+              </div>
             </Tabs>
           </div>
 
           {/* Main stock list - all traceable stocks */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">All Stocks</h2>
+            <h2 className="text-xl font-semibold text-cyan-500">All Stocks</h2>
             <StockList filters={filters} setStocks={setStocks} />
           </div>
         </div>
