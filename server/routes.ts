@@ -10,7 +10,6 @@ import { storage } from "./storage";
 import { insertStockSchema, insertFavoriteSchema } from "@shared/schema";
 import { ZodError } from "zod";
 
-// Add this near the top after imports
 function log(message: string, source = 'server') {
   const timestamp = new Date().toLocaleTimeString();
   console.log(`[${timestamp}] [${source}]: ${message}`);
@@ -31,21 +30,9 @@ const CACHE_TTL = 5 * 60 * 1000; // Increase cache time to 5 minutes
 const BATCH_SIZE = 10; // Increase batch size for faster loading
 const MAX_RETRIES = 5;
 
-
-// Get Finnhub secret from environment
-const FINNHUB_SECRET = process.env.EXPECTED_WEBHOOK_SECRET;
-if (!FINNHUB_SECRET) {
-  throw new Error('EXPECTED_WEBHOOK_SECRET environment variable is not set');
-}
-
 // In-memory caches with timestamps
 const stockCache = new Map<string, { data: any; timestamp: number }>();
 
-
-// Store connected clients
-const clients = new Set<WebSocket>();
-
-// Update the stock data fetching
 async function refreshStockData(endpoint: string): Promise<any> {
   try {
     const url = `${FINNHUB_API_URL}${endpoint}`;
@@ -53,6 +40,9 @@ async function refreshStockData(endpoint: string): Promise<any> {
 
     const response = await fetch(fullUrl);
     if (!response.ok) {
+      if (response.status === 429) {
+        throw new Error('Rate limit exceeded');
+      }
       throw new Error(`HTTP ${response.status}`);
     }
 
@@ -100,13 +90,17 @@ async function finnhubRequest(endpoint: string, retries = MAX_RETRIES): Promise<
       }
     } catch (error) {
       lastError = error;
-      if (i < retries - 1) {
+      if (error.message === 'Rate limit exceeded') {
+        // Wait longer when rate limited
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 2));
+      } else if (i < retries - 1) {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
     }
   }
 
   if (cached) {
+    // Return stale data if we have it
     return cached.data;
   }
 
