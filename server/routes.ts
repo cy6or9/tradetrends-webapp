@@ -3,12 +3,6 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 
-// Initial set of major stocks to ensure we have some working data
-const MAJOR_STOCKS = [
-  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
-  'PFE', 'KO', 'PEP', 'DIS', 'NFLX'
-];
-
 if (!process.env.FINNHUB_API_KEY) {
   throw new Error('FINNHUB_API_KEY environment variable is not set');
 }
@@ -24,6 +18,20 @@ const stockCache = new Map<string, { data: any; timestamp: number }>();
 function log(message: string, source = 'server') {
   const timestamp = new Date().toLocaleTimeString();
   console.log(`[${timestamp}] [${source}]: ${message}`);
+}
+
+async function fetchStockSymbols(): Promise<string[]> {
+  try {
+    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
+    if (!response.ok) throw new Error('Failed to fetch stock symbols');
+    const data = await response.json();
+    return data
+      .filter((stock: any) => stock.type === 'Common Stock')
+      .map((stock: any) => stock.symbol);
+  } catch (error) {
+    log(`Error fetching stock symbols: ${error}`, 'error');
+    return [];
+  }
 }
 
 async function fetchStockData(symbol: string): Promise<any> {
@@ -53,7 +61,7 @@ async function fetchStockData(symbol: string): Promise<any> {
       price: quote.c || 0,
       change: quote.d || 0,
       changePercent: quote.dp || 0,
-      volume: quote.v || 0,
+      volume: Math.max(quote.v || 0, 0), // Ensure positive volume
       marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
       beta: profile.beta || 0,
       exchange: profile.exchange || 'Unknown',
@@ -62,11 +70,13 @@ async function fetchStockData(symbol: string): Promise<any> {
       lastUpdate: new Date().toISOString()
     };
 
-    // Cache the data
-    stockCache.set(cacheKey, {
-      data: stockData,
-      timestamp: Date.now()
-    });
+    // Only cache valid data
+    if (stockData.volume > 0 && stockData.price > 0) {
+      stockCache.set(cacheKey, {
+        data: stockData,
+        timestamp: Date.now()
+      });
+    }
 
     return stockData;
   } catch (error) {
@@ -81,22 +91,31 @@ async function searchAndFilterStocks(req: any, res: any) {
     const tradingApp = req.query.tradingApp;
     const industry = req.query.industry;
     const exchange = req.query.exchange;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
 
     log('Starting stock search...', 'search');
 
-    // Always start with major stocks
-    const stocks: any[] = [];
+    // Get all available stock symbols
+    const symbols = await fetchStockSymbols();
+    log(`Found ${symbols.length} total stocks`, 'search');
 
-    for (const symbol of MAJOR_STOCKS) {
+    // Calculate pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedSymbols = symbols.slice(startIndex, endIndex);
+
+    // Fetch data for paginated symbols
+    const stocks: any[] = [];
+    for (const symbol of paginatedSymbols) {
       const stockData = await fetchStockData(symbol);
-      if (stockData) {
+      if (stockData && stockData.volume > 0) {
         stocks.push(stockData);
       }
-      // Add delay between requests
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
     }
 
-    // Filter stocks based on criteria
+    // Apply filters
     const filteredStocks = stocks
       .filter(stock => stock !== null)
       .filter(stock => !search || 
@@ -110,8 +129,8 @@ async function searchAndFilterStocks(req: any, res: any) {
     log(`Sending ${filteredStocks.length} stocks`, 'search');
     res.json({
       stocks: filteredStocks,
-      hasMore: false,
-      total: filteredStocks.length
+      hasMore: endIndex < symbols.length,
+      total: symbols.length
     });
   } catch (error) {
     log(`Search failed: ${error}`, 'error');
@@ -119,23 +138,46 @@ async function searchAndFilterStocks(req: any, res: any) {
   }
 }
 
-function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
-  // Platform stock lists (simplified for testing)
-  const platformStockLists: Record<string, Set<string>> = {
-    'Robinhood': new Set(MAJOR_STOCKS),
-    'TD Ameritrade': new Set(MAJOR_STOCKS),
-    'E*TRADE': new Set(MAJOR_STOCKS),
-    'Fidelity': new Set(MAJOR_STOCKS),
-    'Charles Schwab': new Set(MAJOR_STOCKS),
-    'Webull': new Set(MAJOR_STOCKS),
-    'Interactive Brokers': new Set(MAJOR_STOCKS)
-  };
+async function fetchSpacList(): Promise<any[]> {
+  try {
+    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
+    if (!response.ok) throw new Error('Failed to fetch SPAC data');
+    const data = await response.json();
 
-  if (platform === 'Any' || !platformStockLists[platform]) {
-    return true;
+    // Filter for potential SPACs (typically have specific naming patterns)
+    const spacSymbols = data
+      .filter((stock: any) => {
+        const symbol = stock.symbol.toUpperCase();
+        return (symbol.endsWith('U') || symbol.includes('SPAC') || symbol.includes('ACQ'));
+      })
+      .map((stock: any) => stock.symbol);
+
+    // Fetch detailed data for each SPAC
+    const spacs = [];
+    for (const symbol of spacSymbols) {
+      const stockData = await fetchStockData(symbol);
+      if (stockData) {
+        spacs.push({
+          ...stockData,
+          status: 'Pre-merger',
+          trustValue: Math.floor(Math.random() * 500 + 100) * 1e6, // Placeholder
+          targetCompany: null
+        });
+      }
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+    }
+
+    return spacs;
+  } catch (error) {
+    log(`Error fetching SPAC list: ${error}`, 'error');
+    return [];
   }
+}
 
-  return platformStockLists[platform].has(symbol);
+function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
+  // In a real implementation, this would check against actual platform APIs
+  // For now, we'll assume all stocks are available on all platforms
+  return true;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -174,6 +216,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       log(`IPO calendar error: ${error}`, 'error');
       res.status(500).json({ error: 'Failed to fetch IPO calendar' });
+    }
+  });
+
+  app.get("/api/finnhub/spacs", async (_req: any, res: any) => {
+    try {
+      const spacs = await fetchSpacList();
+      res.json(spacs);
+    } catch (error) {
+      log(`SPAC list error: ${error}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch SPAC list' });
     }
   });
 
