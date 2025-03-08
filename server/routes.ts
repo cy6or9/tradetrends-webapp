@@ -9,9 +9,9 @@ if (!process.env.FINNHUB_API_KEY) {
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const RATE_LIMIT_DELAY = 500; // 0.5 second between requests
+const RATE_LIMIT_DELAY = 100; // 0.1 second between requests
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const BATCH_SIZE = 3; // Process fewer stocks at a time to avoid rate limits
+const BATCH_SIZE = 10; // Process 10 stocks at a time
 
 // In-memory cache
 const stockCache = new Map<string, { data: any; timestamp: number }>();
@@ -21,11 +21,19 @@ function log(message: string, source = 'server') {
   console.log(`[${timestamp}] [${source}]: ${message}`);
 }
 
-// Initial set of stocks to ensure we have some data
-const INITIAL_STOCKS = [
-  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
-  'PFE', 'KO', 'PEP', 'DIS', 'NFLX'
-];
+async function fetchStockSymbols(): Promise<string[]> {
+  try {
+    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
+    if (!response.ok) throw new Error('Failed to fetch stock symbols');
+    const data = await response.json();
+    return data
+      .filter((stock: any) => stock.type === 'Common Stock')
+      .map((stock: any) => stock.symbol);
+  } catch (error) {
+    log(`Error fetching symbols: ${error}`, 'error');
+    return [];
+  }
+}
 
 async function fetchStockData(symbol: string): Promise<any> {
   try {
@@ -47,7 +55,7 @@ async function fetchStockData(symbol: string): Promise<any> {
     if (!quoteResponse.ok || !profileResponse.ok) {
       if (quoteResponse.status === 429 || profileResponse.status === 429) {
         log(`Rate limit hit for ${symbol}, waiting longer...`, 'api');
-        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 2));
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 5));
         return null;
       }
       throw new Error(`Failed to fetch data for ${symbol}`);
@@ -102,40 +110,23 @@ async function searchAndFilterStocks(req: any, res: any) {
 
     log('Starting stock search...', 'search');
 
-    // Start with initial stocks for first page
-    let stockSymbols = [...INITIAL_STOCKS];
-    if (page === 1) {
-      log(`Using ${stockSymbols.length} initial stocks`, 'search');
-    } else {
-      // For subsequent pages, use a subset of all US stocks
-      const allSymbols = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`)
-        .then(response => response.json())
-        .then(data => data
-          .filter((stock: any) => stock.type === 'Common Stock')
-          .map((stock: any) => stock.symbol)
-        )
-        .catch(error => {
-          log(`Error fetching symbols: ${error}`, 'error');
-          return [];
-        });
-
-      stockSymbols = allSymbols;
-      log(`Fetched ${stockSymbols.length} total symbols`, 'search');
-    }
+    // Get all available stock symbols
+    const symbols = await fetchStockSymbols();
+    log(`Found ${symbols.length} total symbols`, 'search');
 
     // Filter symbols first if search is provided
-    const filteredSymbols = stockSymbols.filter(symbol => 
+    const filteredSymbols = symbols.filter(symbol => 
       !search || symbol.toLowerCase().includes(search)
     );
 
     // Calculate pagination
     const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
+    const endIndex = Math.min(startIndex + limit, filteredSymbols.length);
     const paginatedSymbols = filteredSymbols.slice(startIndex, endIndex);
 
     log(`Processing ${paginatedSymbols.length} symbols for page ${page}`, 'search');
 
-    // Process stocks in small batches
+    // Process stocks in batches
     const stocks = [];
     for (let i = 0; i < paginatedSymbols.length; i += BATCH_SIZE) {
       const batch = paginatedSymbols.slice(i, i + BATCH_SIZE);
@@ -143,7 +134,7 @@ async function searchAndFilterStocks(req: any, res: any) {
       const batchResults = await Promise.all(batchPromises);
 
       const validResults = batchResults.filter(Boolean);
-      log(`Batch ${i/BATCH_SIZE + 1}: got ${validResults.length} valid results`, 'batch');
+      log(`Batch ${Math.floor(i/BATCH_SIZE) + 1}: got ${validResults.length} valid results`, 'batch');
       stocks.push(...validResults);
 
       // Add delay between batches
@@ -152,7 +143,6 @@ async function searchAndFilterStocks(req: any, res: any) {
 
     // Apply filters to fetched stocks
     const filteredStocks = stocks
-      .filter(stock => stock !== null)
       .filter(stock => !search || 
         stock.symbol.toLowerCase().includes(search) ||
         stock.name.toLowerCase().includes(search)
