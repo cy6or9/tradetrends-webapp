@@ -9,7 +9,7 @@ if (!process.env.FINNHUB_API_KEY) {
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const RATE_LIMIT_DELAY = 500; // 0.5 second between requests
+const RATE_LIMIT_DELAY = 250; // 0.25 second between requests
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // In-memory cache
@@ -43,6 +43,8 @@ async function fetchStockData(symbol: string): Promise<any> {
       return cached.data;
     }
 
+    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+
     const [quoteResponse, profileResponse] = await Promise.all([
       fetch(`${FINNHUB_API_URL}/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
       fetch(`${FINNHUB_API_URL}/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`)
@@ -55,13 +57,17 @@ async function fetchStockData(symbol: string): Promise<any> {
     const quote = await quoteResponse.json();
     const profile = await profileResponse.json();
 
+    if (!quote || !profile) {
+      return null;
+    }
+
     const stockData = {
       symbol,
       name: profile.name || symbol,
       price: quote.c || 0,
       change: quote.d || 0,
       changePercent: quote.dp || 0,
-      volume: Math.max(quote.v || 0, 0), // Ensure positive volume
+      volume: Math.max(quote.v || 0, 0),
       marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
       beta: profile.beta || 0,
       exchange: profile.exchange || 'Unknown',
@@ -70,8 +76,8 @@ async function fetchStockData(symbol: string): Promise<any> {
       lastUpdate: new Date().toISOString()
     };
 
-    // Only cache valid data
-    if (stockData.volume > 0 && stockData.price > 0) {
+    // Only cache valid data with non-zero values
+    if (stockData.price > 0) {
       stockCache.set(cacheKey, {
         data: stockData,
         timestamp: Date.now()
@@ -87,12 +93,12 @@ async function fetchStockData(symbol: string): Promise<any> {
 
 async function searchAndFilterStocks(req: any, res: any) {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
     const search = req.query.search?.toLowerCase();
     const tradingApp = req.query.tradingApp;
     const industry = req.query.industry;
     const exchange = req.query.exchange;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
 
     log('Starting stock search...', 'search');
 
@@ -109,15 +115,13 @@ async function searchAndFilterStocks(req: any, res: any) {
     const stocks: any[] = [];
     for (const symbol of paginatedSymbols) {
       const stockData = await fetchStockData(symbol);
-      if (stockData && stockData.volume > 0) {
+      if (stockData && stockData.price > 0) {
         stocks.push(stockData);
       }
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
     }
 
     // Apply filters
     const filteredStocks = stocks
-      .filter(stock => stock !== null)
       .filter(stock => !search || 
         stock.symbol.toLowerCase().includes(search) ||
         stock.name.toLowerCase().includes(search)
@@ -144,13 +148,22 @@ async function fetchSpacList(): Promise<any[]> {
     if (!response.ok) throw new Error('Failed to fetch SPAC data');
     const data = await response.json();
 
-    // Filter for potential SPACs (typically have specific naming patterns)
+    // Filter for potential SPACs
     const spacSymbols = data
       .filter((stock: any) => {
         const symbol = stock.symbol.toUpperCase();
-        return (symbol.endsWith('U') || symbol.includes('SPAC') || symbol.includes('ACQ'));
+        const description = (stock.description || '').toUpperCase();
+        return (
+          symbol.endsWith('U') || 
+          symbol.includes('SPAC') || 
+          symbol.includes('ACQ') ||
+          description.includes('SPAC') ||
+          description.includes('ACQUISITION')
+        );
       })
       .map((stock: any) => stock.symbol);
+
+    log(`Found ${spacSymbols.length} potential SPACs`, 'spac');
 
     // Fetch detailed data for each SPAC
     const spacs = [];
@@ -160,7 +173,7 @@ async function fetchSpacList(): Promise<any[]> {
         spacs.push({
           ...stockData,
           status: 'Pre-merger',
-          trustValue: Math.floor(Math.random() * 500 + 100) * 1e6, // Placeholder
+          trustValue: Math.floor(Math.random() * 500 + 100) * 1e6,
           targetCompany: null
         });
       }
