@@ -51,24 +51,33 @@ export function StockList({ filters, setStocks }: StockListProps) {
     key: keyof Stock;
     direction: 'asc' | 'desc';
   }>({ key: 'analystRating', direction: 'desc' });
-  const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
 
   const fetchStocks = async ({ pageParam = 1 }) => {
-    const searchParams = new URLSearchParams({
-      page: pageParam.toString(),
-      limit: '50',
-      ...(filters.search && { search: filters.search }),
-      ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
-      ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
-      ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange })
-    });
+    try {
+      const searchParams = new URLSearchParams({
+        page: pageParam.toString(),
+        limit: '50',
+        ...(filters.search && { search: filters.search }),
+        ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
+        ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
+        ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange })
+      });
 
-    const response = await fetch(`/api/stocks/search?${searchParams}`);
-    if (!response.ok) throw new Error('Failed to fetch stocks');
-    const data = await response.json();
-    return data;
+      const response = await fetch(`/api/stocks/search?${searchParams}`);
+      if (!response.ok) throw new Error('Failed to fetch stocks');
+      const data = await response.json();
+
+      if (!data.stocks || !Array.isArray(data.stocks)) {
+        throw new Error('Invalid response format');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error fetching stocks:', error);
+      throw error;
+    }
   };
 
   const {
@@ -78,6 +87,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     isFetchingNextPage,
     isLoading,
     isError,
+    error,
     refetch
   } = useInfiniteQuery({
     queryKey: ["/api/stocks", filters],
@@ -88,7 +98,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     },
     staleTime: 30000,
     initialPageParam: 1,
-    retry: 2, // Limit retries to avoid excessive API calls
+    retry: 1
   });
 
   useEffect(() => {
@@ -163,6 +173,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, [sortedStocks, setStocks]);
 
   if (isError) {
+    console.error('Stock list error:', error);
     return (
       <div className="p-8 text-center text-red-500">
         Error loading stocks. Please try refreshing the page.

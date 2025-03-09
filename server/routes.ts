@@ -36,7 +36,7 @@ async function fetchStockSymbols(): Promise<string[]> {
       if (response.status === 429) {
         log('Rate limit hit on symbol fetch, waiting...', 'api');
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 5));
-        return cached?.symbols || []; // Return cached symbols if available
+        return cached?.symbols || [];
       }
       throw new Error('Failed to fetch stock symbols');
     }
@@ -104,7 +104,7 @@ async function fetchStockData(symbol: string): Promise<any> {
       beta: profile.beta || 0,
       exchange: profile.exchange || 'Unknown',
       industry: profile.finnhubIndustry || 'Unknown',
-      analystRating: Math.floor(Math.random() * 20) + 80, // Generate more realistic ratings
+      analystRating: Math.floor(Math.random() * 20) + 80, // Generate realistic ratings
       lastUpdate: new Date().toISOString()
     };
 
@@ -132,8 +132,6 @@ async function searchAndFilterStocks(req: any, res: any) {
     const tradingApp = req.query.tradingApp;
     const industry = req.query.industry;
     const exchange = req.query.exchange;
-
-    log('Starting stock search...', 'search');
 
     // Get all available stock symbols
     const symbols = await fetchStockSymbols();
