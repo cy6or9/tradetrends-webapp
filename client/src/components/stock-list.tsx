@@ -43,9 +43,6 @@ const LoadingSpinner = () => (
   <div className="p-8 text-center text-muted-foreground">
     <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
     <p>Loading stocks...</p>
-    <p className="text-sm text-muted-foreground mt-2">
-      This may take a moment as we gather real-time market data
-    </p>
   </div>
 );
 
@@ -70,7 +67,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
     const response = await fetch(`/api/stocks/search?${searchParams}`);
     if (!response.ok) throw new Error('Failed to fetch stocks');
-    return response.json();
+    const data = await response.json();
+    return data;
   };
 
   const {
@@ -90,6 +88,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     },
     staleTime: 30000,
     initialPageParam: 1,
+    retry: 2, // Limit retries to avoid excessive API calls
   });
 
   useEffect(() => {
@@ -107,16 +106,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
     const element = loadMoreRef.current;
     if (!element) return;
 
-    observerRef.current = new IntersectionObserver(handleObserver, {
+    const observer = new IntersectionObserver(handleObserver, {
       threshold: 0.1,
     });
 
-    observerRef.current.observe(element);
+    observer.observe(element);
 
     return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
+      observer.disconnect();
     };
   }, [handleObserver]);
 
@@ -168,7 +165,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   if (isError) {
     return (
       <div className="p-8 text-center text-red-500">
-        Error loading stocks. Please try again.
+        Error loading stocks. Please try refreshing the page.
       </div>
     );
   }
@@ -261,9 +258,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
         {/* Loading indicator and intersection observer target */}
         <div ref={loadMoreRef} className="py-4 text-center">
-          {isFetchingNextPage && (
-            <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
-          )}
+          {isFetchingNextPage && <LoadingSpinner />}
         </div>
       </div>
     </Card>
