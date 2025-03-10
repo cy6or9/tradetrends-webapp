@@ -37,9 +37,10 @@ export default function Home() {
 
   // Hot stocks filter - stocks with high analyst ratings and recent movement
   const hotStocksFilter = {
-    ...filters,
     minAnalystRating: 80,
     minChangePercent: 2,
+    minPrice: 0.01, // Ensure we get active stocks
+    minVolume: 50000, // Minimum volume for active trading
   };
 
   return (
@@ -83,15 +84,24 @@ export default function Home() {
 
           {/* Market sections */}
           <div className="w-full">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs defaultValue="stocks" className="w-full">
               <TabsList className="w-full justify-start">
+                <TabsTrigger value="stocks" className="text-cyan-500">Hot Stocks</TabsTrigger>
                 <TabsTrigger value="ipo" className="text-cyan-500">IPO Calendar</TabsTrigger>
                 <TabsTrigger value="spacs" className="text-cyan-500">SPACs</TabsTrigger>
-                <TabsTrigger value="stocks" className="text-cyan-500">Hot Stocks</TabsTrigger>
               </TabsList>
 
               <div className="h-[min(400px,50vh)] overflow-hidden">
                 <div className="h-full overflow-y-auto">
+                  <TabsContent value="stocks" className="m-0">
+                    <div className="mt-2">
+                      <p className="text-sm text-cyan-500 mb-2">
+                        Trending stocks with high analyst ratings (80%+) and significant price movement today
+                      </p>
+                      <StockList filters={hotStocksFilter} setStocks={setStocks} />
+                    </div>
+                  </TabsContent>
+
                   <TabsContent value="ipo" className="m-0">
                     <div className="mt-2">
                       <IpoCalendar />
@@ -101,15 +111,6 @@ export default function Home() {
                   <TabsContent value="spacs" className="m-0">
                     <div className="mt-2">
                       <SpacList />
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="stocks" className="m-0">
-                    <div className="mt-2">
-                      <p className="text-sm text-cyan-500 mb-2">
-                        Trending stocks with high analyst ratings (80%+) and significant price movement today
-                      </p>
-                      <StockList filters={hotStocksFilter} setStocks={setStocks} />
                     </div>
                   </TabsContent>
                 </div>

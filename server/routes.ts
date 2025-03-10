@@ -165,14 +165,26 @@ async function searchAndFilterStocks(req: any, res: any) {
     }
 
     // Apply filters to fetched stocks
-    const filteredStocks = stocks
-      .filter(stock => !search || 
-        stock.symbol.toLowerCase().includes(search) ||
-        stock.name.toLowerCase().includes(search)
-      )
-      .filter(stock => !industry || industry === 'Any' || stock.industry === industry)
-      .filter(stock => !exchange || exchange === 'Any' || stock.exchange === exchange)
-      .filter(stock => !tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp));
+    const filteredStocks = stocks.filter(stock => {
+      const meetsAnalystRating = !req.query.minAnalystRating || stock.analystRating >= parseInt(req.query.minAnalystRating);
+      const meetsChangePercent = !req.query.minChangePercent || Math.abs(stock.changePercent) >= parseFloat(req.query.minChangePercent);
+      const meetsMinPrice = !req.query.minPrice || stock.price >= parseFloat(req.query.minPrice);
+      const meetsMinVolume = !req.query.minVolume || stock.volume >= parseInt(req.query.minVolume);
+
+      return (
+        (!search || 
+          stock.symbol.toLowerCase().includes(search) ||
+          stock.name.toLowerCase().includes(search)
+        ) &&
+        (!industry || industry === 'Any' || stock.industry === industry) &&
+        (!exchange || exchange === 'Any' || stock.exchange === exchange) &&
+        (!tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp)) &&
+        meetsAnalystRating &&
+        meetsChangePercent &&
+        meetsMinPrice &&
+        meetsMinVolume
+      );
+    });
 
     log(`Sending ${filteredStocks.length} stocks`, 'search');
     res.json({
