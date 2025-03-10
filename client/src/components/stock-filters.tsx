@@ -18,6 +18,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { stockCache } from "@/lib/stockCache";
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
 
 const TRADING_APPS = [
   "Any",
@@ -103,6 +106,9 @@ interface StockFiltersProps {
 }
 
 export function StockFilters({ onFilterChange }: StockFiltersProps) {
+  const [searchSuggestions, setSearchSuggestions] = useState<Array<{ symbol: string; name: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   const form = useForm<FilterValues>({
     resolver: zodResolver(filterSchema),
     defaultValues: {
@@ -115,6 +121,30 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
     },
   });
 
+  // Handle search suggestions
+  const handleSearchChange = (value: string) => {
+    if (!value) {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const stocks = stockCache.getAllStocks();
+    const suggestions = stocks
+      .filter(stock =>
+        stock.symbol.toLowerCase().includes(value.toLowerCase()) ||
+        stock.name.toLowerCase().includes(value.toLowerCase())
+      )
+      .slice(0, 5)
+      .map(stock => ({
+        symbol: stock.symbol,
+        name: stock.name
+      }));
+
+    setSearchSuggestions(suggestions);
+    setShowSuggestions(true);
+  };
+
   return (
     <Form {...form}>
       <form
@@ -126,20 +156,47 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             control={form.control}
             name="search"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="relative">
                 <FormLabel className="text-cyan-500">Search Stocks</FormLabel>
                 <FormControl>
                   <Input
                     type="text"
                     placeholder="Search by symbol or name..."
                     {...field}
+                    onChange={(e) => {
+                      field.onChange(e);
+                      handleSearchChange(e.target.value);
+                    }}
+                    onFocus={() => field.value && setShowSuggestions(true)}
                     className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
                   />
                 </FormControl>
+                {showSuggestions && searchSuggestions.length > 0 && (
+                  <Card className="absolute w-full mt-1 z-50 max-h-[200px] overflow-y-auto">
+                    <div className="p-2">
+                      {searchSuggestions.map((suggestion) => (
+                        <Button
+                          key={suggestion.symbol}
+                          variant="ghost"
+                          className="w-full justify-start text-left hover:bg-cyan-500/10"
+                          onClick={() => {
+                            form.setValue("search", suggestion.symbol);
+                            setShowSuggestions(false);
+                            onFilterChange(form.getValues());
+                          }}
+                        >
+                          <div>
+                            <div className="font-medium">{suggestion.symbol}</div>
+                            <div className="text-sm text-muted-foreground">{suggestion.name}</div>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  </Card>
+                )}
               </FormItem>
             )}
           />
-
           <div className="flex flex-col gap-2">
             <FormField
               control={form.control}

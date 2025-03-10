@@ -6,8 +6,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -93,8 +91,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
       const cachedStocks = stockCache.getAllStocks();
       if (cachedStocks.length > 0) {
         if (filters.isHotStock) {
-          const hotStocks = cachedStocks.filter(stock => 
-            stock.analystRating >= 80 && 
+          const hotStocks = cachedStocks.filter(stock =>
+            stock.analystRating >= 80 &&
             Math.abs(stock.changePercent) >= 2
           );
           return {
@@ -129,8 +127,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
     stockCache.updateStocks(data.stocks);
 
     if (filters.isHotStock) {
-      data.stocks = data.stocks.filter(stock => 
-        stock.analystRating >= 80 && 
+      data.stocks = data.stocks.filter(stock =>
+        stock.analystRating >= 80 &&
         Math.abs(stock.changePercent) >= 2
       );
       data.total = data.stocks.length;
@@ -218,9 +216,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
   if (!sortedStocks.length) {
     return (
       <div className="p-8 text-center text-muted-foreground">
-        {filters.isFavorite ? "No favorite stocks yet." : 
-         filters.isHotStock ? "No hot stocks matching criteria." :
-         "No stocks found matching your criteria."}
+        {filters.isFavorite ? "No favorite stocks yet." :
+          filters.isHotStock ? "No hot stocks matching criteria." :
+            "No stocks found matching your criteria."}
       </div>
     );
   }
@@ -235,108 +233,116 @@ export function StockList({ filters, setStocks }: StockListProps) {
           </div>
         </div>
       )}
-      <div className="w-full overflow-auto">
-        <ResizablePanelGroup direction="horizontal">
-          <ResizablePanel defaultSize={columnSizes.symbol}>
-            <TableHead>
-              <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full">
-                Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
-            </TableHead>
-          </ResizablePanel>
-          <ResizableHandle />
-          <ResizablePanel defaultSize={columnSizes.name}>
-            <TableHead>
-              <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full">
-                Name <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
-            </TableHead>
-          </ResizablePanel>
-          <ResizableHandle />
-          <ResizablePanel defaultSize={columnSizes.price}>
-            <TableHead>
-              <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full">
-                Price <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
-            </TableHead>
-          </ResizablePanel>
-          <ResizableHandle />
-          <ResizablePanel defaultSize={columnSizes.change}>
-            <TableHead>
-              <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full">
-                Change % <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
-            </TableHead>
-          </ResizablePanel>
-          <ResizableHandle />
-          <ResizablePanel defaultSize={columnSizes.rating}>
-            <TableHead>
-              <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium w-full">
-                Analyst Rating <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
-            </TableHead>
-          </ResizablePanel>
-          <ResizableHandle />
-          <ResizablePanel defaultSize={columnSizes.volume}>
-            <TableHead>
-              <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full">
-                Volume <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
-            </TableHead>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-        <TableBody>
-            {sortedStocks.map((stock) => (
-              <TableRow
-                key={stock.symbol}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
-              >
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavoriteMutation.mutate(stock.id);
-                      }}
-                    >
-                      <Star
-                        className={cn(
-                          "h-4 w-4",
-                          stock.isFavorite ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
+      <div className="w-full">
+        <div className="flex flex-col">
+          <ResizablePanelGroup direction="horizontal" className="min-h-0">
+            <ResizablePanel defaultSize={columnSizes.symbol} minSize={10}>
+              <div className="h-10 flex items-center px-2">
+                <Button variant="ghost" onClick={() => handleSort('symbol')} className="w-full justify-between">
+                  Symbol <ArrowUpDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={columnSizes.name} minSize={15}>
+              <div className="h-10 flex items-center px-2">
+                <Button variant="ghost" onClick={() => handleSort('name')} className="w-full justify-between">
+                  Name <ArrowUpDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={columnSizes.price} minSize={10}>
+              <div className="h-10 flex items-center px-2">
+                <Button variant="ghost" onClick={() => handleSort('price')} className="w-full justify-between">
+                  Price <ArrowUpDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={columnSizes.change} minSize={10}>
+              <div className="h-10 flex items-center px-2">
+                <Button variant="ghost" onClick={() => handleSort('changePercent')} className="w-full justify-between">
+                  Change % <ArrowUpDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={columnSizes.rating} minSize={10}>
+              <div className="h-10 flex items-center px-2">
+                <Button variant="ghost" onClick={() => handleSort('analystRating')} className="w-full justify-between">
+                  Rating <ArrowUpDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={columnSizes.volume} minSize={10}>
+              <div className="h-10 flex items-center px-2">
+                <Button variant="ghost" onClick={() => handleSort('volume')} className="w-full justify-between">
+                  Volume <ArrowUpDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+
+          <div className="flex-1 overflow-auto">
+            <Table>
+              <TableBody>
+                {sortedStocks.map((stock) => (
+                  <TableRow
+                    key={stock.symbol}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavoriteMutation.mutate(stock.id);
+                          }}
+                        >
+                          <Star
+                            className={cn(
+                              "h-4 w-4",
+                              stock.isFavorite ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
+                            )}
+                          />
+                        </Button>
+                        {stock.symbol}
+                      </div>
+                    </TableCell>
+                    <TableCell>{stock.name}</TableCell>
+                    <TableCell>${stock.price.toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        {stock.changePercent > 0 ? (
+                          <TrendingUp className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <TrendingDown className="w-4 h-4 text-red-500" />
                         )}
-                      />
-                    </Button>
-                    {stock.symbol}
-                  </div>
-                </TableCell>
-                <TableCell>{stock.name}</TableCell>
-                <TableCell>${stock.price.toFixed(2)}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    {stock.changePercent > 0 ? (
-                      <TrendingUp className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4 text-red-500" />
-                    )}
-                    <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
-                      {stock.changePercent.toFixed(2)}%
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
-                    {stock.analystRating}%
-                  </Badge>
-                </TableCell>
-                <TableCell>{stock.volume.toLocaleString()}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        {/* Loading indicator and intersection observer target */}
+                        <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
+                          {stock.changePercent.toFixed(2)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
+                        {stock.analystRating}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{stock.volume.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {/* Loading indicator */}
         <div ref={loadMoreRef} className="py-4 text-center">
           {isFetchingNextPage && (
             <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
