@@ -17,11 +17,15 @@ export const stocks = pgTable("stocks", {
   analystRating: real("analyst_rating").notNull(),
   volume: integer("volume").notNull(),
   marketCap: real("market_cap").notNull(),
-  sector: text("sector").notNull(),
+  beta: real("beta").notNull(),
+  exchange: text("exchange").notNull(),
+  industry: text("industry").notNull(),
+  sector: text("sector"),
   shortInterest: real("short_interest"),
   dividendYield: real("dividend_yield"),
   earningsDate: timestamp("earnings_date"),
-  lastUpdated: timestamp("last_updated").notNull(),
+  lastUpdate: timestamp("last_update").notNull().defaultNow(),
+  nextUpdate: timestamp("next_update").notNull(),
 });
 
 export const favorites = pgTable("favorites", {

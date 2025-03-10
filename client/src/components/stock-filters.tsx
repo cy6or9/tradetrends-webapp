@@ -92,6 +92,7 @@ const filterSchema = z.object({
   tradingApp: z.string().optional(),
   sortBy: z.string().optional(),
   sortDir: z.enum(["asc", "desc"]).optional(),
+  newOnly: z.boolean().optional(),
 });
 
 type FilterValues = z.infer<typeof filterSchema>;
@@ -459,6 +460,23 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                     <SelectItem value="desc">Descending</SelectItem>
                   </SelectContent>
                 </Select>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="newOnly"
+            render={({ field }) => (
+              <FormItem className="flex items-center gap-2">
+                <FormLabel className="text-cyan-500">New Listings Only</FormLabel>
+                <FormControl>
+                  <input
+                    type="checkbox"
+                    checked={field.value}
+                    onChange={field.onChange}
+                    className="form-checkbox h-4 w-4 text-cyan-500 border-cyan-500/20"
+                  />
+                </FormControl>
               </FormItem>
             )}
           />

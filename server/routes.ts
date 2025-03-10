@@ -9,15 +9,15 @@ if (!process.env.FINNHUB_API_KEY) {
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const RATE_LIMIT_DELAY = 500; // 0.5 second between requests
+const RATE_LIMIT_DELAY = 200; // 0.2 second between requests
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const MAX_RETRIES = 3;
 
-// In-memory cache with both stock data and analyst ratings
+// In-memory tracking of known stocks and new listings
 const stockCache = new Map<string, { 
   data: any; 
   timestamp: number;
-  analystRating?: number; 
+  analystRating?: number;
+  isNewListing?: boolean;
 }>();
 
 function log(message: string, source = 'server') {
@@ -42,25 +42,16 @@ async function finnhubRequest(endpoint: string, retryCount = 0): Promise<any> {
     if (response.status === 429) {
       log('Rate limit hit, waiting...', 'api');
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 5));
-      if (retryCount < MAX_RETRIES) {
-        return finnhubRequest(endpoint, retryCount + 1);
-      }
-      throw new Error('Rate limit exceeded after retries');
+      return null;
     }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
-    return data;
+    return await response.json();
   } catch (error) {
     log(`API request failed for ${endpoint}: ${error}`, 'error');
-    if (retryCount < MAX_RETRIES) {
-      log(`Retrying request (${retryCount + 1}/${MAX_RETRIES})`, 'api');
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      return finnhubRequest(endpoint, retryCount + 1);
-    }
     return null;
   }
 }
@@ -74,17 +65,14 @@ async function fetchStockData(symbol: string): Promise<any> {
       return cached.data;
     }
 
-    // Add delay before API call
     await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
 
-    // Make API requests with retries
     const [quote, profile] = await Promise.all([
       finnhubRequest(`/quote?symbol=${symbol}`),
       finnhubRequest(`/stock/profile2?symbol=${symbol}`)
     ]);
 
     if (!quote || !profile) {
-      log(`Missing data for ${symbol}`, 'error');
       return null;
     }
 
@@ -103,15 +91,16 @@ async function fetchStockData(symbol: string): Promise<any> {
       exchange: profile.exchange || 'Unknown',
       industry: profile.finnhubIndustry || 'Unknown',
       analystRating,
-      lastUpdate: new Date().toISOString()
+      lastUpdate: new Date().toISOString(),
+      isNewListing: cached?.isNewListing || false
     };
 
-    // Cache the data if it has a valid price
     if (stockData.price > 0) {
       stockCache.set(cacheKey, {
         data: stockData,
         timestamp: Date.now(),
-        analystRating
+        analystRating,
+        isNewListing: cached?.isNewListing || false
       });
       log(`Cached data for ${symbol}`, 'cache');
     }
@@ -123,6 +112,45 @@ async function fetchStockData(symbol: string): Promise<any> {
   }
 }
 
+async function checkNewListings(): Promise<void> {
+  try {
+    const symbolsData = await finnhubRequest('/stock/symbol?exchange=US');
+    if (!symbolsData) return;
+
+    const currentDate = new Date();
+    const newListings = symbolsData.filter((stock: any) => {
+      const symbol = stock.symbol;
+      const cacheKey = `stock_${symbol}`;
+      const cached = stockCache.get(cacheKey);
+
+      // If not in cache and is a new stock, mark as new listing
+      if (!cached && stock.type === 'Common Stock') {
+        stockCache.set(cacheKey, {
+          data: null,
+          timestamp: Date.now(),
+          isNewListing: true
+        });
+        log(`New stock detected: ${symbol}`, 'newListing');
+        return true;
+      }
+      return false;
+    });
+
+    if (newListings.length > 0) {
+      log(`Found ${newListings.length} new listings`, 'newListing');
+      // Process new listings
+      for (const stock of newListings) {
+        await fetchStockData(stock.symbol);
+      }
+    }
+  } catch (error) {
+    log(`Error checking new listings: ${error}`, 'error');
+  }
+}
+
+// Check for new listings every hour
+setInterval(checkNewListings, 60 * 60 * 1000);
+
 async function searchAndFilterStocks(req: any, res: any) {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -131,10 +159,10 @@ async function searchAndFilterStocks(req: any, res: any) {
     const tradingApp = req.query.tradingApp;
     const industry = req.query.industry;
     const exchange = req.query.exchange;
+    const showNewOnly = req.query.newOnly === 'true';
 
     log('Starting stock search...', 'search');
 
-    // Get stock symbols
     const symbolsData = await finnhubRequest('/stock/symbol?exchange=US');
     if (!symbolsData) {
       throw new Error('Failed to fetch stock symbols');
@@ -143,8 +171,6 @@ async function searchAndFilterStocks(req: any, res: any) {
     const symbols = symbolsData
       .filter((stock: any) => stock.type === 'Common Stock')
       .map((stock: any) => stock.symbol);
-
-    log(`Found ${symbols.length} total symbols`, 'search');
 
     // Filter symbols first if search is provided
     const filteredSymbols = symbols.filter(symbol => 
@@ -158,12 +184,14 @@ async function searchAndFilterStocks(req: any, res: any) {
 
     log(`Processing ${paginatedSymbols.length} symbols for page ${page}`, 'search');
 
-    // Process stocks sequentially to avoid rate limits
+    // Process stocks sequentially
     const stocks = [];
     for (const symbol of paginatedSymbols) {
       const stockData = await fetchStockData(symbol);
       if (stockData && stockData.price > 0) {
-        stocks.push(stockData);
+        if (!showNewOnly || stockData.isNewListing) {
+          stocks.push(stockData);
+        }
       }
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
     }
@@ -197,54 +225,6 @@ async function searchAndFilterStocks(req: any, res: any) {
   }
 }
 
-async function fetchSpacList(): Promise<any[]> {
-  try {
-    const symbolsData = await finnhubRequest('/stock/symbol?exchange=US');
-    if (!symbolsData) {
-      throw new Error('Failed to fetch SPAC data');
-    }
-
-    // Filter for potential SPACs
-    const spacSymbols = symbolsData
-      .filter((stock: any) => {
-        const symbol = stock.symbol.toUpperCase();
-        const description = (stock.description || '').toUpperCase();
-        return (
-          symbol.endsWith('U') || 
-          symbol.includes('SPAC') || 
-          symbol.includes('ACQ') ||
-          description.includes('SPAC') ||
-          description.includes('ACQUISITION') ||
-          description.includes('BLANK CHECK') ||
-          symbol.match(/[A-Z]{4}U$/)
-        );
-      })
-      .map((stock: any) => stock.symbol);
-
-    log(`Found ${spacSymbols.length} potential SPACs`, 'spac');
-
-    // Fetch detailed data for SPACs
-    const spacs = [];
-    for (const symbol of spacSymbols) {
-      const stockData = await fetchStockData(symbol);
-      if (stockData && stockData.price > 0) {
-        spacs.push({
-          ...stockData,
-          status: 'Pre-merger',
-          trustValue: Math.floor(Math.random() * 500 + 100) * 1e6,
-          targetCompany: null
-        });
-      }
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-    }
-
-    return spacs;
-  } catch (error) {
-    log(`Error fetching SPAC list: ${error}`, 'error');
-    return [];
-  }
-}
-
 function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
   return true; // For demo purposes, assume all stocks are available on all platforms
 }
@@ -270,6 +250,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Start checking for new listings
+  checkNewListings();
+
   app.get("/api/stocks/search", searchAndFilterStocks);
 
   app.get("/api/finnhub/calendar/ipo", async (_req: any, res: any) => {
@@ -288,7 +271,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/finnhub/spacs", async (_req: any, res: any) => {
     try {
-      const spacs = await fetchSpacList();
+      const response = await finnhubRequest('/stock/symbol?exchange=US');
+      if (!response) throw new Error('Failed to fetch SPAC data');
+
+      // Filter for potential SPACs
+      const spacSymbols = response
+        .filter((stock: any) => {
+          const symbol = stock.symbol.toUpperCase();
+          const description = (stock.description || '').toUpperCase();
+          return (
+            symbol.endsWith('U') || 
+            symbol.includes('SPAC') || 
+            symbol.includes('ACQ') ||
+            description.includes('SPAC') ||
+            description.includes('ACQUISITION') ||
+            description.includes('BLANK CHECK')
+          );
+        })
+        .map((stock: any) => stock.symbol);
+
+      log(`Found ${spacSymbols.length} potential SPACs`, 'spac');
+
+      // Fetch detailed data for SPACs
+      const spacs = [];
+      for (const symbol of spacSymbols) {
+        const stockData = await fetchStockData(symbol);
+        if (stockData && stockData.price > 0) {
+          spacs.push({
+            ...stockData,
+            status: 'Pre-merger',
+            trustValue: Math.floor(Math.random() * 500 + 100) * 1e6,
+            targetCompany: null
+          });
+        }
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      }
+
       res.json(spacs);
     } catch (error) {
       log(`SPAC list error: ${error}`, 'error');
