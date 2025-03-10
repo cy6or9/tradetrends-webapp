@@ -55,11 +55,12 @@ const stockCacheSchema = z.object({
   analystRating: z.number(),
   lastUpdate: z.string(),
   nextUpdate: z.string(),
-  isFavorite: z.boolean()
+  isFavorite: z.boolean().default(false)
 });
 
 class StockCache {
   private readonly CACHE_KEY = 'tradetrends_stock_cache';
+  private readonly FAVORITES_KEY = 'tradetrends_favorites';
   private cache: Map<string, CachedStock>;
   private static instance: StockCache;
 
@@ -77,6 +78,7 @@ class StockCache {
 
   private loadFromStorage(): void {
     try {
+      // Load main cache
       const cached = localStorage.getItem(this.CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
@@ -89,6 +91,19 @@ class StockCache {
           }
         });
       }
+
+      // Load favorites
+      const favorites = localStorage.getItem(this.FAVORITES_KEY);
+      if (favorites) {
+        const favoriteSymbols = JSON.parse(favorites) as string[];
+        favoriteSymbols.forEach(symbol => {
+          const stock = this.cache.get(symbol);
+          if (stock) {
+            stock.isFavorite = true;
+            this.cache.set(symbol, stock);
+          }
+        });
+      }
     } catch (error) {
       console.error('Failed to load stock cache:', error);
     }
@@ -96,8 +111,15 @@ class StockCache {
 
   private saveToStorage(): void {
     try {
+      // Save main cache
       const cacheObj = Object.fromEntries(this.cache.entries());
       localStorage.setItem(this.CACHE_KEY, JSON.stringify(cacheObj));
+
+      // Save favorites separately
+      const favorites = Array.from(this.cache.values())
+        .filter(stock => stock.isFavorite)
+        .map(stock => stock.symbol);
+      localStorage.setItem(this.FAVORITES_KEY, JSON.stringify(favorites));
     } catch (error) {
       console.error('Failed to save stock cache:', error);
     }
@@ -111,20 +133,22 @@ class StockCache {
     }
     this.cache.set(stock.symbol, stock);
     this.saveToStorage();
-    console.log(`Updated stock in cache: ${stock.symbol}`);
   }
 
   updateStocks(stocks: CachedStock[]): void {
+    let updated = false;
     stocks.forEach(stock => {
-      // Preserve favorite status for each stock
       const existingStock = this.cache.get(stock.symbol);
       if (existingStock) {
         stock.isFavorite = existingStock.isFavorite;
       }
       this.cache.set(stock.symbol, stock);
+      updated = true;
     });
-    this.saveToStorage();
-    console.log(`Updated ${stocks.length} stocks in cache`);
+    if (updated) {
+      this.saveToStorage();
+      console.log(`Updated ${stocks.length} stocks in cache`);
+    }
   }
 
   getStock(symbol: string): CachedStock | null {
@@ -132,15 +156,28 @@ class StockCache {
   }
 
   getAllStocks(): CachedStock[] {
-    return Array.from(this.cache.values()).sort((a, b) => {
-      // Sort by time updated (most recent first)
-      return new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime();
-    });
+    return Array.from(this.cache.values());
+  }
+
+  getFavorites(): CachedStock[] {
+    return Array.from(this.cache.values()).filter(stock => stock.isFavorite);
+  }
+
+  toggleFavorite(symbol: string): boolean {
+    const stock = this.cache.get(symbol);
+    if (stock) {
+      stock.isFavorite = !stock.isFavorite;
+      this.cache.set(symbol, stock);
+      this.saveToStorage();
+      console.log(`Toggled favorite status for ${symbol}: ${stock.isFavorite}`);
+      return stock.isFavorite;
+    }
+    return false;
   }
 
   clear(): void {
     // Save favorites before clearing
-    const favorites = Array.from(this.cache.values()).filter(stock => stock.isFavorite);
+    const favorites = this.getFavorites();
 
     // Clear the cache
     this.cache.clear();
@@ -153,16 +190,6 @@ class StockCache {
     // Save the updated cache
     this.saveToStorage();
     console.log('Cache cleared, favorites preserved');
-  }
-
-  toggleFavorite(symbol: string): void {
-    const stock = this.cache.get(symbol);
-    if (stock) {
-      stock.isFavorite = !stock.isFavorite;
-      this.cache.set(symbol, stock);
-      this.saveToStorage();
-      console.log(`Toggled favorite status for ${symbol}: ${stock.isFavorite}`);
-    }
   }
 }
 

@@ -59,6 +59,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const [isTabActive, setIsTabActive] = useState(true);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const [forceUpdate, setForceUpdate] = useState(0);
 
   const handleSort = useCallback((key: string) => {
     setSort(current => ({
@@ -78,17 +79,21 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, []);
 
   const fetchStocks = async ({ pageParam = 1 }) => {
-    // Hot Stocks section - completely independent
+    if (filters.isFavorite) {
+      const favoriteStocks = stockCache.getFavorites();
+      return {
+        stocks: favoriteStocks,
+        hasMore: false,
+        total: favoriteStocks.length
+      };
+    }
+
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
-      // Get both types of hot stocks:
-      // 1. High rating (95%+) with significant movement (>= 2%)
-      // 2. Very high rating (99%+) regardless of movement
       const hotStocks = cachedStocks.filter(stock =>
-        (stock.analystRating >= 95 && Math.abs(stock.changePercent) >= 2) || // Type 1
-        stock.analystRating >= 99 // Type 2
+        (stock.analystRating >= 95 && Math.abs(stock.changePercent) >= 2) || 
+        stock.analystRating >= 99 
       ).sort((a, b) => {
-        // Sort by criteria type first, then by rating and movement
         const aIsType1 = a.analystRating >= 95 && Math.abs(a.changePercent) >= 2;
         const bIsType1 = b.analystRating >= 95 && Math.abs(b.changePercent) >= 2;
         if (aIsType1 && !bIsType1) return -1;
@@ -103,28 +108,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
       };
     }
 
-    // Favorites section - cache only
-    if (filters.isFavorite) {
-      const cachedStocks = stockCache.getAllStocks();
-      const favoriteStocks = cachedStocks.filter(stock => stock.isFavorite);
-      return {
-        stocks: favoriteStocks,
-        hasMore: false,
-        total: favoriteStocks.length
-      };
-    }
-
-    // All Stocks section - search and filters
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
     });
 
-    // If searching, only use search parameter
     if (filters.search) {
       searchParams.append('search', filters.search.toUpperCase());
     } else {
-      // Apply other filters only when not searching
       if (filters.tradingApp && filters.tradingApp !== 'Any') {
         searchParams.append('tradingApp', filters.tradingApp);
       }
@@ -144,7 +135,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
       if (!response.ok) throw new Error('Failed to fetch stocks');
       const data = await response.json();
 
-      // Update cache with any new stocks
       if (data.stocks?.length > 0) {
         stockCache.updateStocks(data.stocks);
       }
@@ -164,7 +154,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     isLoading,
     isError,
   } = useInfiniteQuery({
-    queryKey: ["/api/stocks", filters],
+    queryKey: ["/api/stocks", filters, forceUpdate],
     queryFn: fetchStocks,
     getNextPageParam: (lastPage) => {
       if (!lastPage.hasMore) return undefined;
@@ -174,7 +164,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     initialPageParam: 1,
   });
 
-  // Setup intersection observer for infinite loading
   useEffect(() => {
     if (!loadMoreRef.current || !hasNextPage) return;
 
@@ -305,9 +294,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         className="h-8 w-8 p-0"
                         onClick={(e) => {
                           e.stopPropagation();
-                          stockCache.toggleFavorite(stock.symbol);
-                          // Force a re-render
-                          setStocks?.([...sortedStocks]);
+                          const newFavoriteStatus = stockCache.toggleFavorite(stock.symbol);
+                          setForceUpdate(prev => prev + 1);
                         }}
                       >
                         <Star
