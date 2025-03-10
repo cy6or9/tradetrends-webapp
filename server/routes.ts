@@ -1,38 +1,3 @@
-const INITIAL_STOCKS = [
-  // Technology
-  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'AMD', 'INTC', 'CSCO', 'ORCL', 'IBM', 'ADBE', 'CRM', 'NFLX', 'TSLA',
-  // Finance
-  'JPM', 'BAC', 'WFC', 'GS', 'MS', 'V', 'MA', 'AXP', 'BLK', 'C', 'USB', 'PNC', 'SCHW',
-  // Healthcare
-  'JNJ', 'PFE', 'UNH', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'LLY',
-  // Consumer
-  'WMT', 'PG', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'DIS', 'HD', 'SBUX', 'TGT', 'LOW',
-  // Industrial
-  'BA', 'CAT', 'GE', 'MMM', 'HON', 'UPS', 'FDX', 'LMT', 'RTX', 'DE',
-  // Energy
-  'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'PXD', 'PSX', 'VLO',
-  // Telecommunications
-  'T', 'VZ', 'TMUS', 'CMCSA',
-  // Real Estate
-  'AMT', 'PLD', 'CCI', 'EQIX', 'PSA',
-  // Materials
-  'LIN', 'APD', 'ECL', 'DD', 'NEM',
-  // Popular ETFs
-  'SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO', 'VGT', 'XLK', 'XLF', 'XLE',
-  // Emerging Tech
-  'PLTR', 'SNOW', 'NET', 'CRWD', 'DDOG', 'ZS', 'CFLT', 'MDB', 'GTLB',
-  // Electric Vehicles
-  'RIVN', 'LCID', 'NIO', 'XPEV',
-  // Semiconductors
-  'TSM', 'ASML', 'QCOM', 'TXN', 'AMAT', 'KLAC', 'LRCX', 'MU',
-  // Gaming
-  'ATVI', 'EA', 'TTWO', 'RBLX', 'U',
-  // Fintech
-  'SQ', 'PYPL', 'COIN', 'AFRM', 'SOFI',
-  // Travel
-  'MAR', 'HLT', 'ABNB', 'BKNG', 'UAL', 'DAL', 'AAL', 'CCL', 'RCL'
-];
-
 import { type Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -89,39 +54,38 @@ async function fetchStockData(symbol: string): Promise<any> {
       finnhubRequest(`/stock/peers?symbol=${symbol}`)
     ]);
 
-    if (!quote || !profile) {
+    if (!quote && !profile) {
+      log(`No data found for ${symbol}`, 'api');
       return null;
     }
 
     const stockData = {
       symbol,
-      name: profile.name || symbol,
-      price: quote.c || 0,
-      changePercent: quote.dp || 0,
-      volume: quote.v || 0,
-      marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
-      beta: profile.beta || 0,
-      exchange: profile.exchange || 'Unknown',
-      industry: profile.finnhubIndustry || 'Unknown',
-      sector: profile.sector || null,
-      dayHigh: quote.h || 0,
-      dayLow: quote.l || 0,
-      weekHigh52: basic?.metric['52WeekHigh'] || 0,
-      weekLow52: basic?.metric['52WeekLow'] || 0,
-      outstandingShares: profile.shareOutstanding || 0,
+      name: profile?.name || symbol,
+      price: quote?.c || 0,
+      changePercent: quote?.dp || 0,
+      volume: quote?.v || 0,
+      marketCap: profile?.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
+      beta: profile?.beta || 0,
+      exchange: profile?.exchange || 'Unknown',
+      industry: profile?.finnhubIndustry || 'Unknown',
+      sector: profile?.sector || null,
+      dayHigh: quote?.h || 0,
+      dayLow: quote?.l || 0,
+      weekHigh52: basic?.metric?.['52WeekHigh'] || 0,
+      weekLow52: basic?.metric?.['52WeekLow'] || 0,
+      outstandingShares: profile?.shareOutstanding || 0,
       float: basic?.metric?.shareFloat || 0,
       peRatio: basic?.metric?.peBasicExclExtraTTM || 0,
       dividendYield: basic?.metric?.dividendYieldIndicatedAnnual || 0,
-      afterHoursPrice: quote.ap || quote.c || 0,
-      afterHoursChange: quote.ap ? ((quote.ap - quote.c) / quote.c) * 100 : 0,
-      isAfterHoursTrading: Boolean(quote.ap && quote.ap !== quote.c),
-      industryRank: 0, // Will be calculated in batch
+      afterHoursPrice: quote?.ap || quote?.c || 0,
+      afterHoursChange: quote?.ap ? ((quote.ap - quote.c) / quote.c) * 100 : 0,
+      isAfterHoursTrading: Boolean(quote?.ap && quote.ap !== quote.c),
+      industryRank: 0,
       analystRating: Math.floor(Math.random() * 20) + 80,
-      // Location data
-      city: profile.city || null,
-      state: profile.state || null,
-      country: profile.country || null,
-      // Existing fields
+      city: profile?.city || null,
+      state: profile?.state || null,
+      country: profile?.country || null,
       firstListed: new Date(),
       lastUpdate: new Date(),
       nextUpdate: new Date(Date.now() + 5 * 60 * 1000),
@@ -133,8 +97,8 @@ async function fetchStockData(symbol: string): Promise<any> {
       })
     };
 
-    // Store in database if valid price
-    if (stockData.price > 0) {
+    // Store in database if valid data
+    if (stockData.price > 0 || stockData.name !== symbol) {
       await storage.upsertStock(stockData);
       log(`Updated data for ${symbol}`, 'storage');
     }
@@ -145,6 +109,41 @@ async function fetchStockData(symbol: string): Promise<any> {
     return null;
   }
 }
+
+const INITIAL_STOCKS = [
+  // Technology
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'AMD', 'INTC', 'CSCO', 'ORCL', 'IBM', 'ADBE', 'CRM', 'NFLX', 'TSLA',
+  // Finance
+  'JPM', 'BAC', 'WFC', 'GS', 'MS', 'V', 'MA', 'AXP', 'BLK', 'C', 'USB', 'PNC', 'SCHW',
+  // Healthcare
+  'JNJ', 'PFE', 'UNH', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'LLY',
+  // Consumer
+  'WMT', 'PG', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'DIS', 'HD', 'SBUX', 'TGT', 'LOW',
+  // Industrial
+  'BA', 'CAT', 'GE', 'MMM', 'HON', 'UPS', 'FDX', 'LMT', 'RTX', 'DE',
+  // Energy
+  'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'PXD', 'PSX', 'VLO',
+  // Telecommunications
+  'T', 'VZ', 'TMUS', 'CMCSA',
+  // Real Estate
+  'AMT', 'PLD', 'CCI', 'EQIX', 'PSA',
+  // Materials
+  'LIN', 'APD', 'ECL', 'DD', 'NEM',
+  // Popular ETFs
+  'SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO', 'VGT', 'XLK', 'XLF', 'XLE',
+  // Emerging Tech
+  'PLTR', 'SNOW', 'NET', 'CRWD', 'DDOG', 'ZS', 'CFLT', 'MDB', 'GTLB',
+  // Electric Vehicles
+  'RIVN', 'LCID', 'NIO', 'XPEV',
+  // Semiconductors
+  'TSM', 'ASML', 'QCOM', 'TXN', 'AMAT', 'KLAC', 'LRCX', 'MU',
+  // Gaming
+  'ATVI', 'EA', 'TTWO', 'RBLX', 'U',
+  // Fintech
+  'SQ', 'PYPL', 'COIN', 'AFRM', 'SOFI',
+  // Travel
+  'MAR', 'HLT', 'ABNB', 'BKNG', 'UAL', 'DAL', 'AAL', 'CCL', 'RCL'
+];
 
 async function checkNewListings(): Promise<void> {
   try {
@@ -275,10 +274,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 50;
       const search = req.query.search?.toLowerCase();
-      const tradingApp = req.query.tradingApp;
-      const industry = req.query.industry;
-      const exchange = req.query.exchange;
-      const afterHoursOnly = req.query.afterHoursOnly === 'true';
 
       log('Starting stock search...', 'search');
 
@@ -297,22 +292,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Apply filters
-      stocks = stocks.filter(stock =>
-        (!search ||
-          stock.symbol.toLowerCase().includes(search) ||
-          stock.name.toLowerCase().includes(search)
-        ) &&
-        (!industry || industry === 'Any' || stock.industry === industry) &&
-        (!exchange || exchange === 'Any' || stock.exchange === exchange) &&
-        (!tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp)) &&
-        (!afterHoursOnly || stock.isAfterHoursTrading)
-      );
-
-      // Handle favorites filter
-      if (req.query.isFavorite === 'true') {
-        stocks = stocks.filter(stock => stock.isFavorite);
-      }
 
       // Calculate pagination
       const total = stocks.length;

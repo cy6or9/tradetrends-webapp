@@ -54,6 +54,16 @@ const LoadingSpinner = () => (
   </div>
 );
 
+// Added function to check stock availability on a platform.  Implementation is placeholder.
+const isStockAvailableOnPlatform = (symbol: string, platform: string): boolean => {
+  // Replace with actual logic to check stock availability
+  // This is a placeholder implementation.  You'll need to fetch data from your backend or other source.
+  // Example:  Fetch data from an API endpoint to determine if the stock is available on the given platform.
+  // For now, we assume it's always available.
+  return true;
+};
+
+
 export function StockList({ filters, setStocks }: StockListProps) {
   const [sort, setSort] = useState<{
     key: keyof Stock;
@@ -83,44 +93,54 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, []);
 
   const fetchStocks = async ({ pageParam = 1 }) => {
-    // For hot stocks and favorites, use cache first
-    if (pageParam === 1 && (filters.isHotStock || filters.isFavorite)) {
-      const cachedStocks = stockCache.getAllStocks();
-      if (cachedStocks.length > 0) {
-        let filteredStocks = cachedStocks;
-
-        // Apply hot stocks filter
-        if (filters.isHotStock) {
-          filteredStocks = filteredStocks.filter(stock =>
-            stock.analystRating >= 90 &&
-            Math.abs(stock.changePercent) >= 2
-          );
-        }
-
-        // Apply favorites filter
-        if (filters.isFavorite) {
-          filteredStocks = filteredStocks.filter(stock => stock.isFavorite);
-        }
-
-        return {
-          stocks: filteredStocks,
-          hasMore: false,
-          total: filteredStocks.length
-        };
-      }
-    }
-
-    // For All Stocks section or if cache is empty
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
     });
 
-    // If there's a specific search term, only use that and ignore other filters
+    // If this is a search in the All Stocks section, only use the search parameter
     if (filters.search && !filters.isHotStock && !filters.isFavorite) {
-      searchParams.append('search', filters.search);
+      searchParams.append('search', filters.search.toUpperCase());
     } else {
-      // Otherwise apply all other filters
+      // For Hot Stocks and Favorites sections, or when not searching, use cache first
+      if (pageParam === 1) {
+        const cachedStocks = stockCache.getAllStocks();
+        if (cachedStocks.length > 0) {
+          let filteredStocks = cachedStocks;
+
+          // Apply section-specific filters
+          if (filters.isHotStock) {
+            filteredStocks = filteredStocks.filter(stock =>
+              stock.analystRating >= 90 &&
+              Math.abs(stock.changePercent) >= 2
+            );
+          } else if (filters.isFavorite) {
+            filteredStocks = filteredStocks.filter(stock => stock.isFavorite);
+          } else {
+            // Apply other filters for All Stocks section when not searching
+            if (filters.tradingApp && filters.tradingApp !== 'Any') {
+              filteredStocks = filteredStocks.filter(stock => isStockAvailableOnPlatform(stock.symbol, filters.tradingApp));
+            }
+            if (filters.industry && filters.industry !== 'Any') {
+              filteredStocks = filteredStocks.filter(stock => stock.industry === filters.industry);
+            }
+            if (filters.exchange && filters.exchange !== 'Any') {
+              filteredStocks = filteredStocks.filter(stock => stock.exchange === filters.exchange);
+            }
+            if (filters.afterHoursOnly) {
+              filteredStocks = filteredStocks.filter(stock => stock.isAfterHoursTrading);
+            }
+          }
+
+          return {
+            stocks: filteredStocks,
+            hasMore: false,
+            total: filteredStocks.length
+          };
+        }
+      }
+
+      // Apply regular filters for API request
       if (filters.tradingApp && filters.tradingApp !== 'Any') searchParams.append('tradingApp', filters.tradingApp);
       if (filters.industry && filters.industry !== 'Any') searchParams.append('industry', filters.industry);
       if (filters.exchange && filters.exchange !== 'Any') searchParams.append('exchange', filters.exchange);
