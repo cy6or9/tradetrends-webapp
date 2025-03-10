@@ -43,18 +43,35 @@ const LoadingSpinner = () => (
   <div className="p-8 text-center text-muted-foreground">
     <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
     <p>Loading stocks...</p>
+    <p className="text-sm text-muted-foreground mt-2">
+      This may take a moment as we gather real-time market data
+    </p>
   </div>
 );
 
 export function StockList({ filters, setStocks }: StockListProps) {
-  // All hooks at the top level
   const [sort, setSort] = useState<{
     key: keyof Stock;
     direction: 'asc' | 'desc';
   }>({ key: 'analystRating', direction: 'desc' });
-
+  const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
+
+  const fetchStocks = async ({ pageParam = 1 }) => {
+    const searchParams = new URLSearchParams({
+      page: pageParam.toString(),
+      limit: '50',
+      ...(filters.search && { search: filters.search }),
+      ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
+      ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
+      ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange })
+    });
+
+    const response = await fetch(`/api/stocks/search?${searchParams}`);
+    if (!response.ok) throw new Error('Failed to fetch stocks');
+    return response.json();
+  };
 
   const {
     data,
@@ -63,23 +80,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
     isFetchingNextPage,
     isLoading,
     isError,
-    error,
     refetch
   } = useInfiniteQuery({
-    queryKey: ["/api/stocks/search", filters],
-    queryFn: async ({ pageParam = 1 }) => {
-      const searchParams = new URLSearchParams({
-        page: pageParam.toString(),
-        ...(filters.search && { search: filters.search }),
-        ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
-        ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
-        ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange })
-      });
-
-      const response = await fetch(`/api/stocks/search?${searchParams}`);
-      if (!response.ok) throw new Error('Failed to fetch stocks');
-      return response.json();
-    },
+    queryKey: ["/api/stocks", filters],
+    queryFn: fetchStocks,
     getNextPageParam: (lastPage) => {
       if (!lastPage.hasMore) return undefined;
       return lastPage.total > (lastPage.stocks?.length || 0) ? Math.ceil(lastPage.stocks.length / 50) + 1 : undefined;
@@ -88,12 +92,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
     initialPageParam: 1,
   });
 
-  const handleSort = useCallback((key: keyof Stock) => {
-    setSort(current => ({
-      key,
-      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  }, []);
+  useEffect(() => {
+    refetch();
+  }, [filters, refetch]);
 
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
     const [target] = entries;
@@ -102,42 +103,49 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  // Setup infinite scroll observer
   useEffect(() => {
     const element = loadMoreRef.current;
     if (!element) return;
 
-    const observer = new IntersectionObserver(handleObserver, {
+    observerRef.current = new IntersectionObserver(handleObserver, {
       threshold: 0.1,
     });
 
-    observer.observe(element);
-    return () => observer.disconnect();
+    observerRef.current.observe(element);
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
   }, [handleObserver]);
 
-  // Refetch when filters change
-  useEffect(() => {
-    refetch();
-  }, [filters, refetch]);
+  const handleSort = (key: keyof Stock) => {
+    setSort(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
 
-  // Process and sort data
-  const allStocks = data?.pages.flatMap(page => page.stocks) || [];
-  const filteredStocks = allStocks.filter((stock) => {
-    if (!stock) return false;
-    if (filters.minPrice && stock.price < filters.minPrice) return false;
-    if (filters.maxPrice && stock.price > filters.maxPrice) return false;
-    if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
-    if (filters.maxChangePercent && stock.changePercent > filters.maxChangePercent) return false;
-    if (filters.minAnalystRating && stock.analystRating < filters.minAnalystRating) return false;
-    if (filters.minVolume && stock.volume < filters.minVolume * 1_000_000) return false;
-    if (filters.maxVolume && stock.volume > filters.maxVolume * 1_000_000) return false;
-    if (filters.minMarketCap && stock.marketCap < filters.minMarketCap * 1_000_000_000) return false;
-    if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
-    if (filters.minBeta && stock.beta < filters.minBeta) return false;
-    if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
-    return true;
-  });
+  // Flatten and filter all stocks from all pages
+  const filteredStocks = (data?.pages.flatMap(page => page.stocks) ?? [])
+    .filter((stock) => {
+      if (!stock) return false;
+      if (filters.minPrice && stock.price < filters.minPrice) return false;
+      if (filters.maxPrice && stock.price > filters.maxPrice) return false;
+      if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
+      if (filters.maxChangePercent && stock.changePercent > filters.maxChangePercent) return false;
+      if (filters.minAnalystRating && stock.analystRating < filters.minAnalystRating) return false;
+      if (filters.minVolume && stock.volume < filters.minVolume * 1_000_000) return false;
+      if (filters.maxVolume && stock.volume > filters.maxVolume * 1_000_000) return false;
+      if (filters.minMarketCap && stock.marketCap < filters.minMarketCap * 1_000_000_000) return false;
+      if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
+      if (filters.minBeta && stock.beta < filters.minBeta) return false;
+      if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
+      return true;
+    });
 
+  // Sort stocks
   const sortedStocks = [...filteredStocks].sort((a, b) => {
     const aVal = a[sort.key];
     const bVal = b[sort.key];
@@ -152,28 +160,21 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return 0;
   });
 
-  // Update parent with sorted stocks
+  // Update parent component with stock count
   useEffect(() => {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
 
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
   if (isError) {
     return (
       <div className="p-8 text-center text-red-500">
-        <p>Error loading stocks.</p>
-        <Button 
-          variant="outline" 
-          className="mt-4"
-          onClick={() => refetch()}
-        >
-          Try Again
-        </Button>
+        Error loading stocks. Please try again.
       </div>
     );
+  }
+
+  if (isLoading) {
+    return <LoadingSpinner />;
   }
 
   if (!sortedStocks.length) {
@@ -260,7 +261,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
         {/* Loading indicator and intersection observer target */}
         <div ref={loadMoreRef} className="py-4 text-center">
-          {isFetchingNextPage && <LoadingSpinner />}
+          {isFetchingNextPage && (
+            <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
+          )}
         </div>
       </div>
     </Card>

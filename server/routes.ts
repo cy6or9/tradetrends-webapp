@@ -9,7 +9,7 @@ if (!process.env.FINNHUB_API_KEY) {
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const RATE_LIMIT_DELAY = 150; // 0.15 second between requests
+const RATE_LIMIT_DELAY = 200; // 0.2 second between requests
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const BATCH_SIZE = 5; // Process 5 stocks at a time
 const PAGE_SIZE = 50; // Number of stocks per page
@@ -36,7 +36,6 @@ async function fetchStockSymbols(): Promise<string[]> {
       if (response.status === 429) {
         log('Rate limit hit on symbol fetch, waiting...', 'api');
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 5));
-        return cached?.symbols || [];
       }
       throw new Error('Failed to fetch stock symbols');
     }
@@ -55,8 +54,7 @@ async function fetchStockSymbols(): Promise<string[]> {
     return symbols;
   } catch (error) {
     log(`Error fetching symbols: ${error}`, 'error');
-    const cached = symbolCache.get('US_STOCKS');
-    return cached?.symbols || [];
+    return [];
   }
 }
 
@@ -81,7 +79,7 @@ async function fetchStockData(symbol: string): Promise<any> {
       if (quoteResponse.status === 429 || profileResponse.status === 429) {
         log(`Rate limit hit for ${symbol}, waiting longer...`, 'api');
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 5));
-        return cached?.data || null;
+        return null;
       }
       throw new Error(`Failed to fetch data for ${symbol}`);
     }
@@ -120,8 +118,7 @@ async function fetchStockData(symbol: string): Promise<any> {
     return stockData;
   } catch (error) {
     log(`Error fetching ${symbol}: ${error}`, 'error');
-    const cached = stockCache.get(`stock_${symbol}`);
-    return cached?.data || null;
+    return null;
   }
 }
 
@@ -132,6 +129,8 @@ async function searchAndFilterStocks(req: any, res: any) {
     const tradingApp = req.query.tradingApp;
     const industry = req.query.industry;
     const exchange = req.query.exchange;
+
+    log('Starting stock search...', 'search');
 
     // Get all available stock symbols
     const symbols = await fetchStockSymbols();
@@ -165,26 +164,14 @@ async function searchAndFilterStocks(req: any, res: any) {
     }
 
     // Apply filters to fetched stocks
-    const filteredStocks = stocks.filter(stock => {
-      const meetsAnalystRating = !req.query.minAnalystRating || stock.analystRating >= parseInt(req.query.minAnalystRating);
-      const meetsChangePercent = !req.query.minChangePercent || Math.abs(stock.changePercent) >= parseFloat(req.query.minChangePercent);
-      const meetsMinPrice = !req.query.minPrice || stock.price >= parseFloat(req.query.minPrice);
-      const meetsMinVolume = !req.query.minVolume || stock.volume >= parseInt(req.query.minVolume);
-
-      return (
-        (!search || 
-          stock.symbol.toLowerCase().includes(search) ||
-          stock.name.toLowerCase().includes(search)
-        ) &&
-        (!industry || industry === 'Any' || stock.industry === industry) &&
-        (!exchange || exchange === 'Any' || stock.exchange === exchange) &&
-        (!tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp)) &&
-        meetsAnalystRating &&
-        meetsChangePercent &&
-        meetsMinPrice &&
-        meetsMinVolume
-      );
-    });
+    const filteredStocks = stocks
+      .filter(stock => !search || 
+        stock.symbol.toLowerCase().includes(search) ||
+        stock.name.toLowerCase().includes(search)
+      )
+      .filter(stock => !industry || industry === 'Any' || stock.industry === industry)
+      .filter(stock => !exchange || exchange === 'Any' || stock.exchange === exchange)
+      .filter(stock => !tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp));
 
     log(`Sending ${filteredStocks.length} stocks`, 'search');
     res.json({
