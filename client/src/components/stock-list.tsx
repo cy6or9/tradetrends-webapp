@@ -46,6 +46,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Initialize favorites from cache
+    const cachedFavorites = stockCache.getFavorites();
+    setFavorites(new Set(cachedFavorites.map(stock => stock.symbol)));
+  }, []);
 
   const handleSort = useCallback((key: string) => {
     setSort(current => ({
@@ -66,22 +73,29 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const fetchStocks = async ({ pageParam = 1 }) => {
     if (filters.isFavorite) {
-      const favorites = stockCache.getFavorites();
+      const favoriteStocks = stockCache.getFavorites();
       return {
-        stocks: favorites,
+        stocks: favoriteStocks,
         hasMore: false,
-        total: favorites.length
+        total: favoriteStocks.length
       };
     }
 
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
-      const hotStocks = cachedStocks.filter(stock =>
-        (stock.analystRating >= 95 && Math.abs(stock.changePercent) >= 2) ||
-        stock.analystRating >= 99
+      // Normalize analyst ratings to be more realistic (0-100 scale)
+      const normalizedStocks = cachedStocks.map(stock => ({
+        ...stock,
+        // Normalize analyst rating to be more realistic (max 95%)
+        analystRating: Math.min(Math.round((stock.analystRating / 100) * 95), 95)
+      }));
+
+      const hotStocks = normalizedStocks.filter(stock =>
+        (stock.analystRating >= 85 && Math.abs(stock.changePercent) >= 2) ||
+        stock.analystRating >= 90
       ).sort((a, b) => {
-        const aIsType1 = a.analystRating >= 95 && Math.abs(a.changePercent) >= 2;
-        const bIsType1 = b.analystRating >= 95 && Math.abs(b.changePercent) >= 2;
+        const aIsType1 = a.analystRating >= 85 && Math.abs(a.changePercent) >= 2;
+        const bIsType1 = b.analystRating >= 85 && Math.abs(b.changePercent) >= 2;
         if (aIsType1 && !bIsType1) return -1;
         if (!aIsType1 && bIsType1) return 1;
         return b.analystRating - a.analystRating;
@@ -120,10 +134,21 @@ export function StockList({ filters, setStocks }: StockListProps) {
       const data = await response.json();
 
       if (data.stocks?.length > 0) {
-        stockCache.updateStocks(data.stocks);
+        const normalizedStocks = data.stocks.map(stock => ({
+          ...stock,
+          // Normalize analyst rating to be more realistic (max 95%)
+          analystRating: Math.min(Math.round((stock.analystRating / 100) * 95), 95)
+        }));
+        stockCache.updateStocks(normalizedStocks);
       }
 
-      return data;
+      return {
+        ...data,
+        stocks: data.stocks.map(stock => ({
+          ...stock,
+          analystRating: Math.min(Math.round((stock.analystRating / 100) * 95), 95)
+        }))
+      };
     } catch (error) {
       console.error('Error fetching stocks:', error);
       throw error;
@@ -196,6 +221,20 @@ export function StockList({ filters, setStocks }: StockListProps) {
   useEffect(() => {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
+
+  const handleToggleFavorite = useCallback((symbol: string) => {
+    const newStatus = stockCache.toggleFavorite(symbol);
+    setFavorites(prev => {
+      const newFavorites = new Set(prev);
+      if (newStatus) {
+        newFavorites.add(symbol);
+      } else {
+        newFavorites.delete(symbol);
+      }
+      return newFavorites;
+    });
+    setForceUpdate(prev => prev + 1);
+  }, []);
 
   if (isError) {
     return (
@@ -276,14 +315,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         className="h-8 w-8 p-0"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const newFavoriteStatus = stockCache.toggleFavorite(stock.symbol);
-                          setForceUpdate(prev => prev + 1);
+                          handleToggleFavorite(stock.symbol);
                         }}
                       >
                         <Star
                           className={cn(
                             "h-4 w-4",
-                            stock.isFavorite ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
+                            favorites.has(stock.symbol) ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
                           )}
                         />
                       </Button>
@@ -305,7 +343,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                     </div>
                   </TableCell>
                   <TableCell className="min-w-[60px]">
-                    <Badge variant={stock.analystRating >= 95 ? "default" : "secondary"}>
+                    <Badge variant={stock.analystRating >= 85 ? "default" : "secondary"}>
                       {stock.analystRating}%
                     </Badge>
                   </TableCell>
