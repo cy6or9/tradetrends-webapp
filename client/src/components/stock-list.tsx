@@ -44,7 +44,7 @@ const LoadingSpinner = () => (
 );
 
 const RatingInfoTooltip = () => (
-  <TooltipContent className="w-[350px] p-3 text-xs z-[100] bg-popover/95 shadow-lg backdrop-blur-sm border-border/50">
+  <TooltipContent className="w-[350px] p-3 text-xs z-[9999] relative bg-popover/95 shadow-lg backdrop-blur-sm border-border/50">
     <p className="font-semibold mb-2">How the analyst rating calculation works:</p>
 
     <div className="space-y-2">
