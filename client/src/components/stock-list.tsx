@@ -83,30 +83,34 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, []);
 
   const fetchStocks = async ({ pageParam = 1 }) => {
-    if (pageParam === 1) {
+    // For hot stocks and favorites, use cache first
+    if (pageParam === 1 && (filters.isHotStock || filters.isFavorite)) {
       const cachedStocks = stockCache.getAllStocks();
       if (cachedStocks.length > 0) {
-        // Only apply hot stocks filter for hot stocks section
+        let filteredStocks = cachedStocks;
+
+        // Apply hot stocks filter
         if (filters.isHotStock) {
-          const hotStocks = cachedStocks.filter(stock =>
+          filteredStocks = filteredStocks.filter(stock =>
             stock.analystRating >= 90 &&
             Math.abs(stock.changePercent) >= 2
           );
-          return {
-            stocks: hotStocks,
-            hasMore: false,
-            total: hotStocks.length
-          };
         }
-        // For non-hot stocks sections, return all cached stocks
+
+        // Apply favorites filter
+        if (filters.isFavorite) {
+          filteredStocks = filteredStocks.filter(stock => stock.isFavorite);
+        }
+
         return {
-          stocks: cachedStocks,
+          stocks: filteredStocks,
           hasMore: false,
-          total: cachedStocks.length
+          total: filteredStocks.length
         };
       }
     }
 
+    // For All Stocks section or if cache is empty
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
@@ -114,29 +118,16 @@ export function StockList({ filters, setStocks }: StockListProps) {
       ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
       ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange }),
       ...(filters.isFavorite && { isFavorite: 'true' }),
-      ...(filters.afterHoursOnly && { afterHoursOnly: 'true' })
+      ...(filters.afterHoursOnly && { afterHoursOnly: 'true' }),
+      ...(filters.search && !filters.isHotStock && !filters.isFavorite && { search: filters.search })
     });
-
-    // Only add search parameter for All Stocks section
-    if (!filters.isHotStock && !filters.isFavorite && filters.search) {
-      searchParams.append('search', filters.search);
-    }
 
     const response = await fetch(`/api/stocks/search?${searchParams}`);
     if (!response.ok) throw new Error('Failed to fetch stocks');
     const data = await response.json();
 
-    // Update cache with new stocks, including newly found ones
+    // Update cache with new stocks
     stockCache.updateStocks(data.stocks);
-
-    if (filters.isHotStock) {
-      data.stocks = data.stocks.filter(stock =>
-        stock.analystRating >= 90 &&
-        Math.abs(stock.changePercent) >= 2
-      );
-      data.total = data.stocks.length;
-      data.hasMore = false;
-    }
 
     return data;
   };
@@ -316,7 +307,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
           </TableBody>
         </Table>
 
-        {/* Loading indicator */}
         <div ref={loadMoreRef} className="py-4 text-center">
           {isFetchingNextPage && (
             <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
