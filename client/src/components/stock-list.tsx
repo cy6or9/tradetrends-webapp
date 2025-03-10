@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Star, TrendingUp, TrendingDown, ArrowUpDown, Loader2 } from "lucide-react";
+import { Star, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Stock } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -54,16 +54,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// Added function to check stock availability on a platform.  Implementation is placeholder.
-const isStockAvailableOnPlatform = (symbol: string, platform: string): boolean => {
-  // Replace with actual logic to check stock availability
-  // This is a placeholder implementation.  You'll need to fetch data from your backend or other source.
-  // Example:  Fetch data from an API endpoint to determine if the stock is available on the given platform.
-  // For now, we assume it's always available.
-  return true;
-};
-
-
 export function StockList({ filters, setStocks }: StockListProps) {
   const [sort, setSort] = useState<{
     key: keyof Stock;
@@ -75,12 +65,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const queryClient = useQueryClient();
   const [isTabActive, setIsTabActive] = useState(true);
 
-  const handleSort = (key: keyof Stock) => {
+  const handleSort = useCallback((key: keyof Stock) => {
     setSort(current => ({
       key,
       direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
     }));
-  };
+  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -93,69 +83,71 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, []);
 
   const fetchStocks = async ({ pageParam = 1 }) => {
+    // Hot Stocks section - only use cache and apply criteria
+    if (filters.isHotStock) {
+      const cachedStocks = stockCache.getAllStocks();
+      const hotStocks = cachedStocks.filter(stock =>
+        stock.analystRating >= 90 &&
+        Math.abs(stock.changePercent) >= 2
+      );
+      return {
+        stocks: hotStocks,
+        hasMore: false,
+        total: hotStocks.length
+      };
+    }
+
+    // Favorites section - only use cache
+    if (filters.isFavorite) {
+      const cachedStocks = stockCache.getAllStocks();
+      const favoriteStocks = cachedStocks.filter(stock => stock.isFavorite);
+      return {
+        stocks: favoriteStocks,
+        hasMore: false,
+        total: favoriteStocks.length
+      };
+    }
+
+    // All Stocks section - handle search and filters
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
     });
 
-    // If this is a search in the All Stocks section, only use the search parameter
-    if (filters.search && !filters.isHotStock && !filters.isFavorite) {
+    // If searching in All Stocks section, ignore other filters
+    if (filters.search) {
       searchParams.append('search', filters.search.toUpperCase());
     } else {
-      // For Hot Stocks and Favorites sections, or when not searching, use cache first
-      if (pageParam === 1) {
-        const cachedStocks = stockCache.getAllStocks();
-        if (cachedStocks.length > 0) {
-          let filteredStocks = cachedStocks;
-
-          // Apply section-specific filters
-          if (filters.isHotStock) {
-            filteredStocks = filteredStocks.filter(stock =>
-              stock.analystRating >= 90 &&
-              Math.abs(stock.changePercent) >= 2
-            );
-          } else if (filters.isFavorite) {
-            filteredStocks = filteredStocks.filter(stock => stock.isFavorite);
-          } else {
-            // Apply other filters for All Stocks section when not searching
-            if (filters.tradingApp && filters.tradingApp !== 'Any') {
-              filteredStocks = filteredStocks.filter(stock => isStockAvailableOnPlatform(stock.symbol, filters.tradingApp));
-            }
-            if (filters.industry && filters.industry !== 'Any') {
-              filteredStocks = filteredStocks.filter(stock => stock.industry === filters.industry);
-            }
-            if (filters.exchange && filters.exchange !== 'Any') {
-              filteredStocks = filteredStocks.filter(stock => stock.exchange === filters.exchange);
-            }
-            if (filters.afterHoursOnly) {
-              filteredStocks = filteredStocks.filter(stock => stock.isAfterHoursTrading);
-            }
-          }
-
-          return {
-            stocks: filteredStocks,
-            hasMore: false,
-            total: filteredStocks.length
-          };
-        }
+      // Apply filters only when not searching
+      if (filters.tradingApp && filters.tradingApp !== 'Any') {
+        searchParams.append('tradingApp', filters.tradingApp);
       }
-
-      // Apply regular filters for API request
-      if (filters.tradingApp && filters.tradingApp !== 'Any') searchParams.append('tradingApp', filters.tradingApp);
-      if (filters.industry && filters.industry !== 'Any') searchParams.append('industry', filters.industry);
-      if (filters.exchange && filters.exchange !== 'Any') searchParams.append('exchange', filters.exchange);
-      if (filters.isFavorite) searchParams.append('isFavorite', 'true');
-      if (filters.afterHoursOnly) searchParams.append('afterHoursOnly', 'true');
+      if (filters.industry && filters.industry !== 'Any') {
+        searchParams.append('industry', filters.industry);
+      }
+      if (filters.exchange && filters.exchange !== 'Any') {
+        searchParams.append('exchange', filters.exchange);
+      }
+      if (filters.afterHoursOnly) {
+        searchParams.append('afterHoursOnly', 'true');
+      }
     }
 
-    const response = await fetch(`/api/stocks/search?${searchParams}`);
-    if (!response.ok) throw new Error('Failed to fetch stocks');
-    const data = await response.json();
+    try {
+      const response = await fetch(`/api/stocks/search?${searchParams}`);
+      if (!response.ok) throw new Error('Failed to fetch stocks');
+      const data = await response.json();
 
-    // Update cache with new stocks
-    stockCache.updateStocks(data.stocks);
+      // Update cache with new stocks
+      if (data.stocks?.length > 0) {
+        stockCache.updateStocks(data.stocks);
+      }
 
-    return data;
+      return data;
+    } catch (error) {
+      console.error('Error fetching stocks:', error);
+      throw error;
+    }
   };
 
   const {
@@ -238,10 +230,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     <Card className="relative">
       {!isTabActive && (
         <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
-          </div>
+          <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
         </div>
       )}
       <div className="w-full overflow-auto">

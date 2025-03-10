@@ -21,22 +21,22 @@ export function useWebSocket() {
     const connectWebSocket = () => {
       try {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        const wsUrl = `${protocol}//${window.location.host}/socket`; // Changed from /ws to /socket
         console.log('Attempting WebSocket connection to:', wsUrl);
 
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
-          console.log('WebSocket connected successfully');
+          console.log('WebSocket connected successfully to /socket endpoint');
           setIsConnected(true);
           if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
           }
         };
 
-        ws.onclose = () => {
-          console.log('WebSocket disconnected, attempting reconnect in 5s');
+        ws.onclose = (event) => {
+          console.log(`WebSocket disconnected with code ${event.code}, attempting reconnect in 5s`);
           setIsConnected(false);
           reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
         };
@@ -50,7 +50,6 @@ export function useWebSocket() {
           try {
             const message = JSON.parse(event.data);
             setLastMessage(message);
-            console.log('Received WebSocket message:', message);
 
             // Handle initial data load
             if (message.type === 'initial_data' && Array.isArray(message.data)) {

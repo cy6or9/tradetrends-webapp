@@ -47,6 +47,8 @@ async function finnhubRequest(endpoint: string): Promise<any> {
 
 async function fetchStockData(symbol: string): Promise<any> {
   try {
+    log(`Attempting to fetch data for ${symbol}`, 'api');
+
     const [quote, profile, basic, peers] = await Promise.all([
       finnhubRequest(`/quote?symbol=${symbol}`),
       finnhubRequest(`/stock/profile2?symbol=${symbol}`),
@@ -54,11 +56,7 @@ async function fetchStockData(symbol: string): Promise<any> {
       finnhubRequest(`/stock/peers?symbol=${symbol}`)
     ]);
 
-    if (!quote && !profile) {
-      log(`No data found for ${symbol}`, 'api');
-      return null;
-    }
-
+    // Create stock data even with minimal information
     const stockData = {
       symbol,
       name: profile?.name || symbol,
@@ -67,7 +65,7 @@ async function fetchStockData(symbol: string): Promise<any> {
       volume: quote?.v || 0,
       marketCap: profile?.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
       beta: profile?.beta || 0,
-      exchange: profile?.exchange || 'Unknown',
+      exchange: profile?.exchange || 'NASDAQ',
       industry: profile?.finnhubIndustry || 'Unknown',
       sector: profile?.sector || null,
       dayHigh: quote?.h || 0,
@@ -97,8 +95,8 @@ async function fetchStockData(symbol: string): Promise<any> {
       })
     };
 
-    // Store in database if valid data
-    if (stockData.price > 0 || stockData.name !== symbol) {
+    // Store in database if we got any response
+    if (quote || profile) {
       await storage.upsertStock(stockData);
       log(`Updated data for ${symbol}`, 'storage');
     }
@@ -202,21 +200,22 @@ async function initializeStocks(): Promise<void> {
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
+  // Update WebSocket server initialization
   const wss = new WebSocketServer({
     server: httpServer,
-    path: '/ws',
+    path: '/socket',  // Changed from /ws to /socket
     perMessageDeflate: false
   });
 
   const clients = new Set<WebSocket>();
 
   wss.on('connection', (ws: WebSocket) => {
-    log('Client connected', 'websocket');
+    log('Client connected to WebSocket server', 'websocket');
     clients.add(ws);
 
     ws.on('close', () => {
       clients.delete(ws);
-      log('Client disconnected', 'websocket');
+      log('Client disconnected from WebSocket server', 'websocket');
     });
 
     ws.on('error', (error) => {
@@ -226,6 +225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Send initial stock data
     storage.getActiveStocks().then(stocks => {
       if (ws.readyState === WebSocket.OPEN) {
+        log('Sending initial stock data to new client', 'websocket');
         ws.send(JSON.stringify({
           type: 'initial_data',
           data: stocks
@@ -273,25 +273,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 50;
-      const search = req.query.search?.toLowerCase();
+      const search = req.query.search?.toUpperCase();
 
       log('Starting stock search...', 'search');
 
       // Get stocks from database
       let stocks = await storage.getActiveStocks();
 
-      // If searching for a specific stock that's not in our database, try to fetch it
-      if (search && search.length >= 1 && !stocks.some(s =>
-        s.symbol.toLowerCase() === search.toLowerCase() ||
-        s.symbol.toLowerCase().includes(search.toLowerCase())
-      )) {
-        const newStockData = await fetchStockData(search.toUpperCase());
+      // If searching for a specific stock
+      if (search && search.length >= 1) {
+        // Try to fetch from Finnhub first if it's an exact symbol match
+        const newStockData = await fetchStockData(search);
         if (newStockData) {
-          stocks = [newStockData, ...stocks];
-          log(`Added new stock ${search.toUpperCase()} to results`, 'search');
+          // Add to results and update cache
+          const existingIndex = stocks.findIndex(s => s.symbol === search);
+          if (existingIndex >= 0) {
+            stocks[existingIndex] = newStockData;
+          } else {
+            stocks = [newStockData, ...stocks];
+          }
+          log(`Added/Updated stock ${search} in results`, 'search');
         }
-      }
 
+        // Filter by search term
+        stocks = stocks.filter(stock =>
+          stock.symbol.toUpperCase().includes(search) ||
+          stock.name.toUpperCase().includes(search)
+        );
+      } else {
+        // Apply other filters only if not searching
+        const tradingApp = req.query.tradingApp;
+        const industry = req.query.industry;
+        const exchange = req.query.exchange;
+        const afterHoursOnly = req.query.afterHoursOnly === 'true';
+
+        stocks = stocks.filter(stock =>
+          (!industry || industry === 'Any' || stock.industry === industry) &&
+          (!exchange || exchange === 'Any' || stock.exchange === exchange) &&
+          (!tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp)) &&
+          (!afterHoursOnly || stock.isAfterHoursTrading)
+        );
+      }
 
       // Calculate pagination
       const total = stocks.length;
