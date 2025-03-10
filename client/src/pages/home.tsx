@@ -35,6 +35,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("stocks");
   const [allStocksCount, setAllStocksCount] = useState(0);
   const [allStocksExpanded, setAllStocksExpanded] = useState(false);
+  const [favoritesExpanded, setFavoritesExpanded] = useState(true);
   const [stocks, setStocks] = useState<any[]>([]); //Retaining the original stocks state
 
   // Hot stocks filter - stocks with high analyst ratings and recent movement
@@ -83,14 +84,6 @@ export default function Home() {
             </CardHeader>
           </Card>
 
-          {/* Favorites List */}
-          <div>
-            <h2 className="text-xl font-semibold text-cyan-500 mb-2 flex items-center gap-2">
-              <Star className="h-5 w-5 fill-current" /> Favorites
-            </h2>
-            <StockList filters={{ isFavorite: true }} />
-          </div>
-
           {/* Market sections */}
           <div className="w-full">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -125,6 +118,30 @@ export default function Home() {
                 </div>
               </div>
             </Tabs>
+          </div>
+
+          {/* Favorites List - Collapsible */}
+          <div className="mt-2">
+            <Button
+              variant="ghost"
+              className="w-full flex justify-between items-center py-2 text-xl font-semibold text-cyan-500"
+              onClick={() => setFavoritesExpanded(!favoritesExpanded)}
+            >
+              <div className="flex items-center gap-2">
+                <Star className="h-5 w-5 fill-current" />
+                <span>Favorites</span>
+              </div>
+              {favoritesExpanded ? (
+                <ChevronDown className="h-5 w-5" />
+              ) : (
+                <ChevronRight className="h-5 w-5" />
+              )}
+            </Button>
+            {favoritesExpanded && (
+              <div className="mt-2">
+                <StockList filters={{ isFavorite: true }} />
+              </div>
+            )}
           </div>
 
           {/* All Stocks - Collapsible */}

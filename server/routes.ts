@@ -145,6 +145,13 @@ async function searchAndFilterStocks(req: any, res: any) {
       (!tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp))
     );
 
+    // Handle favorites filter
+    if (req.query.isFavorite === 'true') {
+      const userFavorites = await storage.getFavorites(req.session?.userId || 0);
+      const favoriteStockIds = new Set(userFavorites.map(f => f.stockId));
+      stocks = stocks.filter(stock => favoriteStockIds.has(stock.id));
+    }
+
     // Update prices for displayed stocks
     for (const stock of stocks.slice((page - 1) * limit, page * limit)) {
       if (new Date(stock.nextUpdate) <= new Date()) {
