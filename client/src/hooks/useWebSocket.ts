@@ -3,47 +3,63 @@ import { stockCache } from '@/lib/stockCache';
 
 interface WebSocketMessage {
   type: string;
-  data: {
-    symbol: string;
-    price: number;
-    change: number;
-    timestamp: string;
-  };
+  data: any;
 }
 
 export function useWebSocket() {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectTimeoutRef = useRef<number>();
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
+  const baseReconnectDelay = 5000;
 
   useEffect(() => {
+    const getReconnectDelay = () => {
+      // Exponential backoff with a max of 30 seconds
+      return Math.min(baseReconnectDelay * Math.pow(2, reconnectAttempts.current), 30000);
+    };
+
     const connectWebSocket = () => {
       try {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          console.log('WebSocket already connected');
+          return;
+        }
+
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}/socket`; // Changed from /ws to /socket
+        const wsUrl = `${protocol}//${window.location.host}/socket`;
         console.log('Attempting WebSocket connection to:', wsUrl);
 
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
-          console.log('WebSocket connected successfully to /socket endpoint');
+          console.log('WebSocket connected successfully');
           setIsConnected(true);
+          reconnectAttempts.current = 0;
           if (reconnectTimeoutRef.current) {
-            clearTimeout(reconnectTimeoutRef.current);
+            window.clearTimeout(reconnectTimeoutRef.current);
           }
         };
 
         ws.onclose = (event) => {
-          console.log(`WebSocket disconnected with code ${event.code}, attempting reconnect in 5s`);
+          console.log(`WebSocket disconnected with code ${event.code}`);
           setIsConnected(false);
-          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
+
+          if (reconnectAttempts.current < maxReconnectAttempts) {
+            const delay = getReconnectDelay();
+            console.log(`Attempting reconnect in ${delay/1000}s (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`);
+            reconnectTimeoutRef.current = window.setTimeout(connectWebSocket, delay);
+            reconnectAttempts.current++;
+          } else {
+            console.log('Max reconnection attempts reached');
+          }
         };
 
         ws.onerror = (error) => {
           console.error('WebSocket error:', error);
-          setIsConnected(false);
         };
 
         ws.onmessage = (event) => {
@@ -59,17 +75,8 @@ export function useWebSocket() {
 
             // Handle real-time updates
             if (message.type === 'stock_update' && message.data) {
-              const stock = stockCache.getStock(message.data.symbol);
-              if (stock) {
-                stockCache.updateStock({
-                  ...stock,
-                  price: message.data.price,
-                  changePercent: message.data.change,
-                  lastUpdate: new Date().toISOString(),
-                  nextUpdate: new Date(Date.now() + 5 * 60 * 1000).toISOString()
-                });
-                console.log('Updated stock in cache:', message.data.symbol);
-              }
+              stockCache.updateStock(message.data);
+              console.log('Updated stock in cache:', message.data.symbol);
             }
           } catch (error) {
             console.error('Error handling WebSocket message:', error);
@@ -77,7 +84,11 @@ export function useWebSocket() {
         };
       } catch (error) {
         console.error('Error establishing WebSocket connection:', error);
-        reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
+        if (reconnectAttempts.current < maxReconnectAttempts) {
+          const delay = getReconnectDelay();
+          reconnectTimeoutRef.current = window.setTimeout(connectWebSocket, delay);
+          reconnectAttempts.current++;
+        }
       }
     };
 
@@ -88,7 +99,7 @@ export function useWebSocket() {
         wsRef.current.close();
       }
       if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
+        window.clearTimeout(reconnectTimeoutRef.current);
       }
     };
   }, []);

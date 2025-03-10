@@ -38,12 +38,9 @@ export default function Home() {
   const [favoritesExpanded, setFavoritesExpanded] = useState(true);
   const [favoriteStocksCount, setFavoriteStocksCount] = useState(0);
 
-  // Hot stocks filter - stocks with high analyst ratings and recent movement
+  // Hot stocks criteria - completely independent from filters
   const hotStocksFilter = {
-    ...filters,
-    isHotStock: true,
-    minAnalystRating: 90,
-    minChangePercent: 2,
+    isHotStock: true // This is the only filter needed for hot stocks
   };
 
   // Update favorites expanded state based on count
@@ -65,7 +62,7 @@ export default function Home() {
         <Menu className="h-4 w-4" />
       </Button>
 
-      {/* Filters in sliding menu */}
+      {/* Filters in sliding menu - only affects All Stocks section */}
       <SlidingMenu isOpen={isMenuOpen} onToggle={() => setIsMenuOpen(!isMenuOpen)}>
         <div className="space-y-4">
           <h2 className="text-lg font-semibold text-cyan-500">Filters & Sorting</h2>
@@ -183,7 +180,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-      {/* Add loading overlay here for inactive tabs */}
     </div>
   );
 }

@@ -83,13 +83,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, []);
 
   const fetchStocks = async ({ pageParam = 1 }) => {
-    // Hot Stocks section - only use cache and apply criteria
+    // Hot Stocks section - completely independent
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
       const hotStocks = cachedStocks.filter(stock =>
         stock.analystRating >= 90 &&
         Math.abs(stock.changePercent) >= 2
-      );
+      ).sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+
       return {
         stocks: hotStocks,
         hasMore: false,
@@ -114,11 +115,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
       limit: '50',
     });
 
-    // If searching in All Stocks section, ignore other filters
+    // If searching, only use search parameter
     if (filters.search) {
       searchParams.append('search', filters.search.toUpperCase());
     } else {
-      // Apply filters only when not searching
+      // Apply other filters only when not searching
       if (filters.tradingApp && filters.tradingApp !== 'Any') {
         searchParams.append('tradingApp', filters.tradingApp);
       }
@@ -138,7 +139,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
       if (!response.ok) throw new Error('Failed to fetch stocks');
       const data = await response.json();
 
-      // Update cache with new stocks
+      // Update cache with any new stocks
       if (data.stocks?.length > 0) {
         stockCache.updateStocks(data.stocks);
       }
@@ -194,10 +195,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const toggleFavoriteMutation = useMutation({
     mutationFn: async (stockId: number) => {
-      const response = await apiRequest(`/api/stocks/${stockId}/favorite`, {
+      return apiRequest(`/api/stocks/${stockId}/favorite`, {
         method: 'POST'
       });
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/stocks'] });
@@ -233,94 +233,96 @@ export function StockList({ filters, setStocks }: StockListProps) {
           <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
         </div>
       )}
-      <div className="w-full overflow-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
-                  Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
-                  Name <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium">
-                  Price <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium">
-                  Change % <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium">
-                  Rating <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium">
-                  Volume <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedStocks.map((stock) => (
-              <TableRow
-                key={stock.symbol}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
-              >
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavoriteMutation.mutate(stock.id);
-                      }}
-                    >
-                      <Star
-                        className={cn(
-                          "h-4 w-4",
-                          stock.isFavorite ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
-                        )}
-                      />
-                    </Button>
-                    {stock.symbol}
-                  </div>
-                </TableCell>
-                <TableCell>{stock.name}</TableCell>
-                <TableCell>${stock.price.toFixed(2)}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    {stock.changePercent > 0 ? (
-                      <TrendingUp className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4 text-red-500" />
-                    )}
-                    <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
-                      {stock.changePercent.toFixed(2)}%
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
-                    {stock.analystRating}%
-                  </Badge>
-                </TableCell>
-                <TableCell>{stock.volume.toLocaleString()}</TableCell>
+      <div className="w-full overflow-x-auto">
+        <div className="min-w-[800px]">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background z-10">
+              <TableRow>
+                <TableHead className="sticky left-0 bg-background min-w-[200px] z-20">
+                  <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
+                    Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead className="min-w-[250px]">
+                  <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
+                    Name <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead className="min-w-[100px]">
+                  <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full justify-between">
+                    Price <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead className="min-w-[120px]">
+                  <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full justify-between">
+                    Change % <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead className="min-w-[100px]">
+                  <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium w-full justify-between">
+                    Rating <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead className="min-w-[120px]">
+                  <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
+                    Volume <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {sortedStocks.map((stock) => (
+                <TableRow
+                  key={stock.symbol}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
+                >
+                  <TableCell className="sticky left-0 bg-background font-medium min-w-[200px] z-10">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavoriteMutation.mutate(stock.id);
+                        }}
+                      >
+                        <Star
+                          className={cn(
+                            "h-4 w-4",
+                            stock.isFavorite ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
+                          )}
+                        />
+                      </Button>
+                      {stock.symbol}
+                    </div>
+                  </TableCell>
+                  <TableCell className="min-w-[250px]">{stock.name}</TableCell>
+                  <TableCell className="min-w-[100px]">${stock.price.toFixed(2)}</TableCell>
+                  <TableCell className="min-w-[120px]">
+                    <div className="flex items-center gap-1">
+                      {stock.changePercent > 0 ? (
+                        <TrendingUp className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4 text-red-500" />
+                      )}
+                      <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
+                        {stock.changePercent.toFixed(2)}%
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="min-w-[100px]">
+                    <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
+                      {stock.analystRating}%
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="min-w-[120px]">{stock.volume.toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
 
         <div ref={loadMoreRef} className="py-4 text-center">
           {isFetchingNextPage && (
