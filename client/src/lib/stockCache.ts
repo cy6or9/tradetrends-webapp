@@ -115,7 +115,7 @@ class StockCache {
       const cacheObj = Object.fromEntries(this.cache.entries());
       localStorage.setItem(this.CACHE_KEY, JSON.stringify(cacheObj));
 
-      // Save favorites separately
+      // Save favorites separately for persistence
       const favorites = Array.from(this.cache.values())
         .filter(stock => stock.isFavorite)
         .map(stock => stock.symbol);
@@ -138,6 +138,7 @@ class StockCache {
   updateStocks(stocks: CachedStock[]): void {
     let updated = false;
     stocks.forEach(stock => {
+      // Preserve favorite status for each stock when updating
       const existingStock = this.cache.get(stock.symbol);
       if (existingStock) {
         stock.isFavorite = existingStock.isFavorite;
@@ -147,7 +148,6 @@ class StockCache {
     });
     if (updated) {
       this.saveToStorage();
-      console.log(`Updated ${stocks.length} stocks in cache`);
     }
   }
 
@@ -169,7 +169,6 @@ class StockCache {
       stock.isFavorite = !stock.isFavorite;
       this.cache.set(symbol, stock);
       this.saveToStorage();
-      console.log(`Toggled favorite status for ${symbol}: ${stock.isFavorite}`);
       return stock.isFavorite;
     }
     return false;
@@ -189,7 +188,6 @@ class StockCache {
 
     // Save the updated cache
     this.saveToStorage();
-    console.log('Cache cleared, favorites preserved');
   }
 }
 

@@ -17,25 +17,11 @@ import { stockCache } from "@/lib/stockCache";
 
 interface StockListProps {
   filters: {
-    minPrice?: number;
-    maxPrice?: number;
-    minChangePercent?: number;
-    maxChangePercent?: number;
-    minAnalystRating?: number;
-    minVolume?: number;
-    maxVolume?: number;
-    minMarketCap?: number;
-    maxMarketCap?: number;
-    minBeta?: number;
-    maxBeta?: number;
-    sortBy?: string;
-    sortDir?: "asc" | "desc";
     search?: string;
     tradingApp?: string;
     industry?: string;
     exchange?: string;
     isFavorite?: boolean;
-    afterHoursOnly?: boolean;
     isHotStock?: boolean;
   };
   setStocks?: (stocks: any[]) => void;
@@ -80,19 +66,19 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const fetchStocks = async ({ pageParam = 1 }) => {
     if (filters.isFavorite) {
-      const favoriteStocks = stockCache.getFavorites();
+      const favorites = stockCache.getFavorites();
       return {
-        stocks: favoriteStocks,
+        stocks: favorites,
         hasMore: false,
-        total: favoriteStocks.length
+        total: favorites.length
       };
     }
 
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
       const hotStocks = cachedStocks.filter(stock =>
-        (stock.analystRating >= 95 && Math.abs(stock.changePercent) >= 2) || 
-        stock.analystRating >= 99 
+        (stock.analystRating >= 95 && Math.abs(stock.changePercent) >= 2) ||
+        stock.analystRating >= 99
       ).sort((a, b) => {
         const aIsType1 = a.analystRating >= 95 && Math.abs(a.changePercent) >= 2;
         const bIsType1 = b.analystRating >= 95 && Math.abs(b.changePercent) >= 2;
@@ -108,6 +94,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
       };
     }
 
+    // All Stocks section - fetch and cache
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
@@ -124,9 +111,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
       }
       if (filters.exchange && filters.exchange !== 'Any') {
         searchParams.append('exchange', filters.exchange);
-      }
-      if (filters.afterHoursOnly) {
-        searchParams.append('afterHoursOnly', 'true');
       }
     }
 
@@ -228,9 +212,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   if (!sortedStocks.length) {
     return (
       <div className="p-8 text-center text-muted-foreground">
-        {filters.isFavorite ? "No favorite stocks yet." :
-          filters.isHotStock ? "No hot stocks matching criteria." :
-            "No stocks found matching your criteria."}
+        {filters.isFavorite ? "No favorite stocks yet." : "No stocks found matching your criteria."}
       </div>
     );
   }
