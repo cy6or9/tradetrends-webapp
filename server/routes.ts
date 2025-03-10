@@ -285,6 +285,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get stocks from database
       let stocks = await storage.getActiveStocks();
 
+      // If searching for a specific stock that's not in our database, try to fetch it
+      if (search && search.length >= 1 && !stocks.some(s =>
+        s.symbol.toLowerCase() === search.toLowerCase() ||
+        s.symbol.toLowerCase().includes(search.toLowerCase())
+      )) {
+        const newStockData = await fetchStockData(search.toUpperCase());
+        if (newStockData) {
+          stocks = [newStockData, ...stocks];
+          log(`Added new stock ${search.toUpperCase()} to results`, 'search');
+        }
+      }
+
       // Apply filters
       stocks = stocks.filter(stock =>
         (!search ||

@@ -59,6 +59,10 @@ export default function StockPage() {
     timeStyle: 'medium',
   });
 
+  // Format location data
+  const locationParts = [stock.city, stock.state, stock.country].filter(Boolean);
+  const locationDisplay = locationParts.length > 0 ? locationParts.join(', ') : 'N/A';
+
   return (
     <div className="container mx-auto p-4 space-y-6">
       <Card>
@@ -108,17 +112,7 @@ export default function StockPage() {
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Location</div>
-              <div>
-                {stock.city || stock.state || stock.country ? (
-                  <span>
-                    {[stock.city, stock.state, stock.country]
-                      .filter(Boolean)
-                      .join(', ')}
-                  </span>
-                ) : (
-                  'N/A'
-                )}
-              </div>
+              <div>{locationDisplay}</div>
             </div>
           </div>
 
