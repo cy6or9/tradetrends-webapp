@@ -47,6 +47,7 @@ const LoadingSpinner = () => (
 );
 
 export function StockList({ filters, setStocks }: StockListProps) {
+  // All hooks at the top level
   const [sort, setSort] = useState<{
     key: keyof Stock;
     direction: 'asc' | 'desc';
@@ -65,9 +66,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
     error,
     refetch
   } = useInfiniteQuery({
-    queryKey: ["/api/stocks", filters],
+    queryKey: ["/api/stocks/search", filters],
     queryFn: async ({ pageParam = 1 }) => {
-      console.log('Fetching page:', pageParam);
       const searchParams = new URLSearchParams({
         page: pageParam.toString(),
         ...(filters.search && { search: filters.search }),
@@ -77,14 +77,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
       });
 
       const response = await fetch(`/api/stocks/search?${searchParams}`);
-      if (!response.ok) {
-        console.error('API Error:', response.status, response.statusText);
-        throw new Error('Failed to fetch stocks');
-      }
-
-      const data = await response.json();
-      console.log('Received data:', data);
-      return data;
+      if (!response.ok) throw new Error('Failed to fetch stocks');
+      return response.json();
     },
     getNextPageParam: (lastPage) => {
       if (!lastPage.hasMore) return undefined;
@@ -92,22 +86,23 @@ export function StockList({ filters, setStocks }: StockListProps) {
     },
     staleTime: 30000,
     initialPageParam: 1,
-    retry: 1
   });
 
-  useEffect(() => {
-    console.log('Filters changed, refetching...');
-    refetch();
-  }, [filters, refetch]);
+  const handleSort = useCallback((key: keyof Stock) => {
+    setSort(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  }, []);
 
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
     const [target] = entries;
     if (target.isIntersecting && hasNextPage && !isFetchingNextPage) {
-      console.log('Loading next page...');
       fetchNextPage();
     }
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
+  // Setup infinite scroll observer
   useEffect(() => {
     const element = loadMoreRef.current;
     if (!element) return;
@@ -120,37 +115,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return () => observer.disconnect();
   }, [handleObserver]);
 
-  const handleSort = (key: keyof Stock) => {
-    setSort(current => ({
-      key,
-      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
+  // Refetch when filters change
+  useEffect(() => {
+    refetch();
+  }, [filters, refetch]);
 
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (isError) {
-    console.error('Stock list error:', error);
-    return (
-      <div className="p-8 text-center text-red-500">
-        <p>Error loading stocks.</p>
-        <Button 
-          variant="outline" 
-          className="mt-4"
-          onClick={() => refetch()}
-        >
-          Try Again
-        </Button>
-      </div>
-    );
-  }
-
-  // Get all stocks from all pages
+  // Process and sort data
   const allStocks = data?.pages.flatMap(page => page.stocks) || [];
-
-  // Apply filters
   const filteredStocks = allStocks.filter((stock) => {
     if (!stock) return false;
     if (filters.minPrice && stock.price < filters.minPrice) return false;
@@ -167,7 +138,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return true;
   });
 
-  // Sort stocks
   const sortedStocks = [...filteredStocks].sort((a, b) => {
     const aVal = a[sort.key];
     const bVal = b[sort.key];
@@ -182,10 +152,29 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return 0;
   });
 
-  // Update parent component with current stocks
+  // Update parent with sorted stocks
   useEffect(() => {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (isError) {
+    return (
+      <div className="p-8 text-center text-red-500">
+        <p>Error loading stocks.</p>
+        <Button 
+          variant="outline" 
+          className="mt-4"
+          onClick={() => refetch()}
+        >
+          Try Again
+        </Button>
+      </div>
+    );
+  }
 
   if (!sortedStocks.length) {
     return (
