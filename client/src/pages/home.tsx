@@ -35,7 +35,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("stocks");
   const [allStocksCount, setAllStocksCount] = useState(0);
   const [allStocksExpanded, setAllStocksExpanded] = useState(false);
-  const [favoritesExpanded, setFavoritesExpanded] = useState(true);
   const [stocks, setStocks] = useState<any[]>([]); //Retaining the original stocks state
 
   // Hot stocks filter - stocks with high analyst ratings and recent movement
@@ -68,112 +67,88 @@ export default function Home() {
       {/* Main content */}
       <div className={`transition-all duration-200 ${isMenuOpen ? "lg:ml-[350px]" : "lg:ml-[350px]"}`}>
         <div className="container mx-auto p-4 space-y-3 max-w-[100vw] overflow-x-hidden">
-          {/* App Header and Market Activity - Fixed Position */}
-          <div className="fixed top-0 left-0 right-0 bg-background z-40 border-b border-border shadow-sm">
-            <div className="container mx-auto p-4">
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle className="text-4xl font-bold">Trade<span className="text-cyan-500">Trends</span></CardTitle>
-                      <p className="text-cyan-500 mt-2">
-                        Advanced stock market analysis filtering & trending trade data tracker for better investing
-                      </p>
-                    </div>
-                    <ErrorBoundary fallback={null}>
-                      <WebSocketStatus stockCount={allStocksCount} />
-                    </ErrorBoundary>
-                  </div>
-                </CardHeader>
-              </Card>
-
-              {/* Market Activity Tabs */}
-              <div className="mt-4">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="w-full justify-start">
-                    <TabsTrigger value="ipo" className="text-cyan-500">IPO Calendar</TabsTrigger>
-                    <TabsTrigger value="spacs" className="text-cyan-500">SPACs</TabsTrigger>
-                    <TabsTrigger value="stocks" className="text-cyan-500">Hot Stocks</TabsTrigger>
-                  </TabsList>
-
-                  <div className="h-[min(400px,50vh)] overflow-hidden">
-                    <div className="h-full overflow-y-auto">
-                      <TabsContent value="ipo" className="m-0">
-                        <div className="mt-2">
-                          <IpoCalendar />
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="spacs" className="m-0">
-                        <div className="mt-2">
-                          <SpacList />
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="stocks" className="m-0">
-                        <div className="mt-2">
-                          <p className="text-sm text-cyan-500 mb-2">
-                            Trending stocks with high analyst ratings (80%+) and significant price movement today
-                          </p>
-                          <StockList filters={hotStocksFilter} />
-                        </div>
-                      </TabsContent>
-                    </div>
-                  </div>
-                </Tabs>
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-4xl font-bold">Trade<span className="text-cyan-500">Trends</span></CardTitle>
+                  <p className="text-cyan-500 mt-2">
+                    Advanced stock market analysis filtering & trending trade data tracker for better investing
+                  </p>
+                </div>
+                <ErrorBoundary fallback={null}>
+                  <WebSocketStatus stockCount={allStocksCount} />
+                </ErrorBoundary>
               </div>
-            </div>
+            </CardHeader>
+          </Card>
+
+          {/* Favorites List */}
+          <div>
+            <h2 className="text-xl font-semibold text-cyan-500 mb-2 flex items-center gap-2">
+              <Star className="h-5 w-5 fill-current" /> Favorites
+            </h2>
+            <StockList filters={{ isFavorite: true }} />
           </div>
 
-          {/* Content below fixed header - Add margin-top to account for fixed header */}
-          <div className="mt-[600px] space-y-6">
-            {/* Favorites List - Collapsible */}
-            <div>
-              <Button
-                variant="ghost"
-                className="w-full flex justify-between items-center py-2 text-xl font-semibold text-cyan-500"
-                onClick={() => setFavoritesExpanded(!favoritesExpanded)}
-              >
-                <div className="flex items-center gap-2">
-                  <Star className="h-5 w-5 fill-current" />
-                  <span>Favorites</span>
-                </div>
-                {favoritesExpanded ? (
-                  <ChevronDown className="h-5 w-5" />
-                ) : (
-                  <ChevronRight className="h-5 w-5" />
-                )}
-              </Button>
-              {favoritesExpanded && (
-                <div className="mt-2">
-                  <StockList filters={{ isFavorite: true }} />
-                </div>
-              )}
-            </div>
+          {/* Market sections */}
+          <div className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="w-full justify-start">
+                <TabsTrigger value="ipo" className="text-cyan-500">IPO Calendar</TabsTrigger>
+                <TabsTrigger value="spacs" className="text-cyan-500">SPACs</TabsTrigger>
+                <TabsTrigger value="stocks" className="text-cyan-500">Hot Stocks</TabsTrigger>
+              </TabsList>
 
-            {/* All Stocks - Collapsible */}
-            <div>
-              <Button
-                variant="ghost"
-                className="w-full flex justify-between items-center py-2 text-xl font-semibold text-cyan-500"
-                onClick={() => setAllStocksExpanded(!allStocksExpanded)}
-              >
-                <div className="flex items-center gap-2">
-                  <span>All Stocks</span>
-                  <span className="text-sm text-muted-foreground">({allStocksCount} stocks)</span>
+              <div className="h-[min(400px,50vh)] overflow-hidden">
+                <div className="h-full overflow-y-auto">
+                  <TabsContent value="ipo" className="m-0">
+                    <div className="mt-2">
+                      <IpoCalendar />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="spacs" className="m-0">
+                    <div className="mt-2">
+                      <SpacList />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="stocks" className="m-0">
+                    <div className="mt-2">
+                      <p className="text-sm text-cyan-500 mb-2">
+                        Trending stocks with high analyst ratings (80%+) and significant price movement today
+                      </p>
+                      <StockList filters={hotStocksFilter} />
+                    </div>
+                  </TabsContent>
                 </div>
-                {allStocksExpanded ? (
-                  <ChevronDown className="h-5 w-5" />
-                ) : (
-                  <ChevronRight className="h-5 w-5" />
-                )}
-              </Button>
-              {allStocksExpanded && (
-                <div className="mt-2">
-                  <StockList filters={filters} setStocks={(stocks) => setAllStocksCount(stocks.length)} />
-                </div>
+              </div>
+            </Tabs>
+          </div>
+
+          {/* All Stocks - Collapsible */}
+          <div className="mt-2">
+            <Button
+              variant="ghost"
+              className="w-full flex justify-between items-center py-2 text-xl font-semibold text-cyan-500"
+              onClick={() => setAllStocksExpanded(!allStocksExpanded)}
+            >
+              <div className="flex items-center gap-2">
+                <span>All Stocks</span>
+                <span className="text-sm text-muted-foreground">({allStocksCount} stocks)</span>
+              </div>
+              {allStocksExpanded ? (
+                <ChevronDown className="h-5 w-5" />
+              ) : (
+                <ChevronRight className="h-5 w-5" />
               )}
-            </div>
+            </Button>
+            {allStocksExpanded && (
+              <div className="mt-2">
+                <StockList filters={filters} setStocks={(stocks) => setAllStocksCount(stocks.length)} />
+              </div>
+            )}
           </div>
         </div>
       </div>
