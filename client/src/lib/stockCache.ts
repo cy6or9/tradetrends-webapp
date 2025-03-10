@@ -104,47 +104,65 @@ class StockCache {
   }
 
   updateStock(stock: CachedStock): void {
+    // Preserve favorite status when updating
+    const existingStock = this.cache.get(stock.symbol);
+    if (existingStock) {
+      stock.isFavorite = existingStock.isFavorite;
+    }
     this.cache.set(stock.symbol, stock);
     this.saveToStorage();
+    console.log(`Updated stock in cache: ${stock.symbol}`);
   }
 
   updateStocks(stocks: CachedStock[]): void {
-    stocks.forEach(stock => this.cache.set(stock.symbol, stock));
+    stocks.forEach(stock => {
+      // Preserve favorite status for each stock
+      const existingStock = this.cache.get(stock.symbol);
+      if (existingStock) {
+        stock.isFavorite = existingStock.isFavorite;
+      }
+      this.cache.set(stock.symbol, stock);
+    });
     this.saveToStorage();
+    console.log(`Updated ${stocks.length} stocks in cache`);
   }
 
   getStock(symbol: string): CachedStock | null {
-    const stock = this.cache.get(symbol);
-    if (!stock) return null;
-
-    // Check if the data is stale
-    if (new Date(stock.nextUpdate) <= new Date()) {
-      return null;
-    }
-
-    return stock;
+    return this.cache.get(symbol) || null;
   }
 
   getAllStocks(): CachedStock[] {
-    const now = new Date();
-    return Array.from(this.cache.values())
-      .filter(stock => new Date(stock.nextUpdate) > now)
-      .sort((a, b) => {
-        // Sort by analyst rating (null values at the end)
-        if (a.analystRating === null) return 1;
-        if (b.analystRating === null) return -1;
-        return b.analystRating - a.analystRating;
-      });
+    return Array.from(this.cache.values()).sort((a, b) => {
+      // Sort by time updated (most recent first)
+      return new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime();
+    });
   }
 
-  clearStaleData(): void {
-    const now = new Date();
-    for (const [symbol, stock] of this.cache.entries()) {
-      if (new Date(stock.nextUpdate) <= now) {
-        this.cache.delete(symbol);
-      }
-    }
+  clear(): void {
+    // Save favorites before clearing
+    const favorites = Array.from(this.cache.values()).filter(stock => stock.isFavorite);
+
+    // Clear the cache
+    this.cache.clear();
+
+    // Restore favorites
+    favorites.forEach(stock => {
+      this.cache.set(stock.symbol, stock);
+    });
+
+    // Save the updated cache
     this.saveToStorage();
+    console.log('Cache cleared, favorites preserved');
+  }
+
+  toggleFavorite(symbol: string): void {
+    const stock = this.cache.get(symbol);
+    if (stock) {
+      stock.isFavorite = !stock.isFavorite;
+      this.cache.set(symbol, stock);
+      this.saveToStorage();
+      console.log(`Toggled favorite status for ${symbol}: ${stock.isFavorite}`);
+    }
   }
 }
 

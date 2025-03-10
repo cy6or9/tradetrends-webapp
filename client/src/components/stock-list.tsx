@@ -108,17 +108,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
       };
     }
 
-    // Favorites section - only use cache
-    if (filters.isFavorite) {
-      const cachedStocks = stockCache.getAllStocks();
-      const favoriteStocks = cachedStocks.filter(stock => stock.isFavorite);
-      return {
-        stocks: favoriteStocks,
-        hasMore: false,
-        total: favoriteStocks.length
-      };
-    }
-
     // All Stocks section - handle search and filters
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),

@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { stockCache } from "@/lib/stockCache";
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Trash2, RotateCcw } from "lucide-react";
 
 const TRADING_APPS = [
   "Any",
@@ -122,7 +123,31 @@ export function StockFilters({ onFilterChange, onEnterPress }: StockFiltersProps
     },
   });
 
-  // Handle search suggestions
+  const resetFilters = () => {
+    form.reset({
+      minPrice: "0.03",
+      sortBy: "analystRating",
+      sortDir: "desc",
+      exchange: "Any",
+      industry: "Any",
+      tradingApp: "Any",
+    });
+    onFilterChange({
+      minPrice: "0.03",
+      sortBy: "analystRating",
+      sortDir: "desc",
+      exchange: "Any",
+      industry: "Any",
+      tradingApp: "Any",
+    });
+  };
+
+  const clearCache = () => {
+    const favorites = stockCache.getAllStocks().filter(stock => stock.isFavorite);
+    stockCache.clear();
+    stockCache.updateStocks(favorites);
+  };
+
   const handleSearchChange = (value: string) => {
     if (!value) {
       setSearchSuggestions([]);
@@ -156,6 +181,20 @@ export function StockFilters({ onFilterChange, onEnterPress }: StockFiltersProps
         onChange={() => onFilterChange(form.getValues())}
         className="space-y-4"
       >
+        {/* Reset Filters Button at Top */}
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full hover:bg-cyan-500/10 hover:text-cyan-500 border-cyan-500/20 flex items-center justify-center gap-2"
+          onClick={(e) => {
+            e.preventDefault();
+            resetFilters();
+          }}
+        >
+          <RotateCcw className="h-4 w-4" />
+          Reset Filters
+        </Button>
+
         <div className="space-y-4">
           <FormField
             control={form.control}
@@ -177,7 +216,7 @@ export function StockFilters({ onFilterChange, onEnterPress }: StockFiltersProps
                       if (e.key === 'Enter') {
                         e.preventDefault();
                         onFilterChange(form.getValues());
-                        onEnterPress?.(); // Call onEnterPress when Enter is pressed
+                        onEnterPress?.();
                       }
                     }}
                     className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
@@ -196,7 +235,7 @@ export function StockFilters({ onFilterChange, onEnterPress }: StockFiltersProps
                             form.setValue("search", suggestion.symbol);
                             setShowSuggestions(false);
                             onFilterChange(form.getValues());
-                            onEnterPress?.(); // Close menu when suggestion is selected
+                            onEnterPress?.();
                           }}
                         >
                           <div>
@@ -563,33 +602,21 @@ export function StockFilters({ onFilterChange, onEnterPress }: StockFiltersProps
               </FormItem>
             )}
           />
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full hover:bg-cyan-500/10 hover:text-cyan-500 border-cyan-500/20"
-            onClick={(e) => {
-              e.preventDefault();
-              form.reset({
-                minPrice: "0.03",
-                sortBy: "analystRating",
-                sortDir: "desc",
-                exchange: "Any",
-                industry: "Any",
-                tradingApp: "Any",
-              });
-              onFilterChange({
-                minPrice: "0.03",
-                sortBy: "analystRating",
-                sortDir: "desc",
-                exchange: "Any",
-                industry: "Any",
-                tradingApp: "Any",
-              });
-            }}
-          >
-            Reset Filters
-          </Button>
         </div>
+
+        {/* Clear Cache Button at Bottom */}
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full hover:bg-red-500/10 hover:text-red-500 border-red-500/20 flex items-center justify-center gap-2"
+          onClick={(e) => {
+            e.preventDefault();
+            clearCache();
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+          Clear Cache (Preserves Favorites)
+        </Button>
       </form>
     </Form>
   );
