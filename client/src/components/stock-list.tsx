@@ -10,10 +10,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Star, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
+import { Star, TrendingUp, TrendingDown, ArrowUpDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { stockCache } from "@/lib/stockCache";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface StockListProps {
   filters: {
@@ -37,6 +42,43 @@ const LoadingSpinner = () => (
   </div>
 );
 
+const RatingInfoTooltip = () => (
+  <TooltipContent className="w-[350px] p-3 text-xs">
+    <p className="font-semibold mb-2">How the analyst rating calculation works:</p>
+
+    <div className="space-y-2">
+      <div>
+        <p className="font-medium">Base Rating (0-100):</p>
+        <ul className="list-disc pl-4 space-y-1">
+          <li>Strong Buy: 125% weight (enables ratings above 100% for strong conviction)</li>
+          <li>Buy: 100% weight</li>
+          <li>Hold: 50% weight</li>
+          <li>Sell: 0% weight</li>
+          <li>Strong Sell: -25% weight (penalty)</li>
+        </ul>
+      </div>
+
+      <div>
+        <p className="font-medium">Quality Factors:</p>
+        <ul className="list-disc pl-4 space-y-1">
+          <li>Analyst Coverage: Score reduced if less than 20 analysts</li>
+          <li>Price Target Impact: 30% of final score</li>
+          <li>No artificial cap - enables exceptional ratings</li>
+        </ul>
+      </div>
+
+      <div>
+        <p className="font-medium">Updates:</p>
+        <ul className="list-disc pl-4 space-y-1">
+          <li>Ratings update every 6 hours</li>
+          <li>Price targets factored when available</li>
+          <li>Historical data preserved</li>
+        </ul>
+      </div>
+    </div>
+  </TooltipContent>
+);
+
 export function StockList({ filters, setStocks }: StockListProps) {
   const [sort, setSort] = useState<{
     key: string;
@@ -49,7 +91,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // Initialize favorites from cache
     const cachedFavorites = stockCache.getFavorites();
     setFavorites(new Set(cachedFavorites.map(stock => stock.symbol)));
   }, []);
@@ -84,12 +125,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
       const hotStocks = cachedStocks.filter(stock =>
-        // Type 1: High rating with significant movement
         (stock.analystRating >= 90 && Math.abs(stock.changePercent) >= 2) ||
-        // Type 2: Exceptional rating regardless of movement
         stock.analystRating >= 95
       ).sort((a, b) => {
-        // Sort by criteria type first, then by rating
         const aIsType1 = a.analystRating >= 90 && Math.abs(a.changePercent) >= 2;
         const bIsType1 = b.analystRating >= 90 && Math.abs(b.changePercent) >= 2;
         if (aIsType1 && !bIsType1) return -1;
@@ -104,7 +142,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
       };
     }
 
-    // All Stocks section - fetch and cache
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
@@ -277,9 +314,19 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   </Button>
                 </TableHead>
                 <TableHead className="min-w-[60px]">
-                  <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium w-full justify-between">
-                    Rate <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium justify-between">
+                      Rate <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
+                          <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
+                        </Button>
+                      </TooltipTrigger>
+                      <RatingInfoTooltip />
+                    </Tooltip>
+                  </div>
                 </TableHead>
                 <TableHead className="min-w-[70px]">
                   <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
