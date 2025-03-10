@@ -114,13 +114,19 @@ export function StockList({ filters, setStocks }: StockListProps) {
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
-      ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
-      ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
-      ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange }),
-      ...(filters.isFavorite && { isFavorite: 'true' }),
-      ...(filters.afterHoursOnly && { afterHoursOnly: 'true' }),
-      ...(filters.search && !filters.isHotStock && !filters.isFavorite && { search: filters.search })
     });
+
+    // If there's a specific search term, only use that and ignore other filters
+    if (filters.search && !filters.isHotStock && !filters.isFavorite) {
+      searchParams.append('search', filters.search);
+    } else {
+      // Otherwise apply all other filters
+      if (filters.tradingApp && filters.tradingApp !== 'Any') searchParams.append('tradingApp', filters.tradingApp);
+      if (filters.industry && filters.industry !== 'Any') searchParams.append('industry', filters.industry);
+      if (filters.exchange && filters.exchange !== 'Any') searchParams.append('exchange', filters.exchange);
+      if (filters.isFavorite) searchParams.append('isFavorite', 'true');
+      if (filters.afterHoursOnly) searchParams.append('afterHoursOnly', 'true');
+    }
 
     const response = await fetch(`/api/stocks/search?${searchParams}`);
     if (!response.ok) throw new Error('Failed to fetch stocks');
