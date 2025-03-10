@@ -38,6 +38,7 @@ interface StockListProps {
     industry?: string;
     exchange?: string;
     isFavorite?: boolean;
+    afterHoursOnly?: boolean; // Added to handle after-hours filter
   };
   setStocks?: (stocks: Stock[]) => void;
 }
@@ -52,6 +53,16 @@ const LoadingSpinner = () => (
   </div>
 );
 
+// Assume stockCache is defined elsewhere and handles caching logic.  Example implementation below:
+const stockCache = {
+  stocks: [] as Stock[],
+  getAllStocks: () => this.stocks,
+  updateStocks: (newStocks: Stock[]) => {
+    this.stocks = newStocks;
+  }
+};
+
+
 export function StockList({ filters, setStocks }: StockListProps) {
   const [sort, setSort] = useState<{
     key: keyof Stock;
@@ -63,6 +74,19 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const queryClient = useQueryClient();
 
   const fetchStocks = async ({ pageParam = 1 }) => {
+    // Check cache first
+    if (pageParam === 1) {
+      const cachedStocks = stockCache.getAllStocks();
+      if (cachedStocks.length > 0) {
+        // Return cached data immediately
+        return {
+          stocks: cachedStocks,
+          hasMore: true,
+          total: cachedStocks.length
+        };
+      }
+    }
+
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
@@ -70,12 +94,18 @@ export function StockList({ filters, setStocks }: StockListProps) {
       ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
       ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
       ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange }),
-      ...(filters.isFavorite && { isFavorite: 'true' })
+      ...(filters.isFavorite && { isFavorite: 'true' }),
+      ...(filters.afterHoursOnly && { afterHoursOnly: 'true' })
     });
 
     const response = await fetch(`/api/stocks/search?${searchParams}`);
     if (!response.ok) throw new Error('Failed to fetch stocks');
-    return response.json();
+    const data = await response.json();
+
+    // Update cache with new data
+    stockCache.updateStocks(data.stocks);
+
+    return data;
   };
 
   const {

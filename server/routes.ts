@@ -52,9 +52,11 @@ async function finnhubRequest(endpoint: string): Promise<any> {
 
 async function fetchStockData(symbol: string): Promise<any> {
   try {
-    const [quote, profile] = await Promise.all([
+    const [quote, profile, basic, peers] = await Promise.all([
       finnhubRequest(`/quote?symbol=${symbol}`),
-      finnhubRequest(`/stock/profile2?symbol=${symbol}`)
+      finnhubRequest(`/stock/profile2?symbol=${symbol}`),
+      finnhubRequest(`/stock/metric?symbol=${symbol}&metric=all`),
+      finnhubRequest(`/stock/peers?symbol=${symbol}`)
     ]);
 
     if (!quote || !profile) {
@@ -65,15 +67,34 @@ async function fetchStockData(symbol: string): Promise<any> {
       symbol,
       name: profile.name || symbol,
       price: quote.c || 0,
-      change: quote.d || 0,
       changePercent: quote.dp || 0,
       volume: quote.v || 0,
       marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
       beta: profile.beta || 0,
       exchange: profile.exchange || 'Unknown',
       industry: profile.finnhubIndustry || 'Unknown',
-      analystRating: Math.floor(Math.random() * 20) + 80, // Generate between 80-99
-      nextUpdate: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes from now
+      sector: profile.sector || null,
+      dayHigh: quote.h || 0,
+      dayLow: quote.l || 0,
+      weekHigh52: basic?.metric['52WeekHigh'] || 0,
+      weekLow52: basic?.metric['52WeekLow'] || 0,
+      outstandingShares: profile.shareOutstanding || 0,
+      float: basic?.metric?.shareFloat || 0,
+      peRatio: basic?.metric?.peBasicExclExtraTTM || 0,
+      dividendYield: basic?.metric?.dividendYieldIndicatedAnnual || 0,
+      afterHoursPrice: quote.ap || quote.c || 0,
+      afterHoursChange: quote.ap ? ((quote.ap - quote.c) / quote.c) * 100 : 0,
+      isAfterHoursTrading: Boolean(quote.ap && quote.ap !== quote.c),
+      industryRank: 0, // Will be calculated in batch
+      analystRating: Math.floor(Math.random() * 20) + 80,
+      firstListed: new Date(),
+      lastUpdate: new Date(),
+      nextUpdate: new Date(Date.now() + 5 * 60 * 1000),
+      isActive: true,
+      cached_data: JSON.stringify({
+        peers: peers || [],
+        metrics: basic?.metric || {}
+      })
     };
 
     // Store in database if valid price

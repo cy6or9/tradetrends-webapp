@@ -93,6 +93,7 @@ const filterSchema = z.object({
   sortBy: z.string().optional(),
   sortDir: z.enum(["asc", "desc"]).optional(),
   newOnly: z.boolean().optional(),
+  afterHoursOnly: z.boolean().optional(),
 });
 
 type FilterValues = z.infer<typeof filterSchema>;
@@ -469,6 +470,23 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             render={({ field }) => (
               <FormItem className="flex items-center gap-2">
                 <FormLabel className="text-cyan-500">New Listings Only</FormLabel>
+                <FormControl>
+                  <input
+                    type="checkbox"
+                    checked={field.value}
+                    onChange={field.onChange}
+                    className="form-checkbox h-4 w-4 text-cyan-500 border-cyan-500/20"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="afterHoursOnly"
+            render={({ field }) => (
+              <FormItem className="flex items-center gap-2">
+                <FormLabel className="text-cyan-500">After Hours Trading Only</FormLabel>
                 <FormControl>
                   <input
                     type="checkbox"

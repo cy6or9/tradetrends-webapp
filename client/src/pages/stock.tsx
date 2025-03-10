@@ -98,6 +98,49 @@ export default function StockPage() {
               <div>{stock.industry}</div>
             </div>
           </div>
+
+          {/* Enhanced Data Display */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-t pt-4">
+            <div>
+              <div className="text-sm text-muted-foreground">Day Range</div>
+              <div>${stock.dayLow?.toFixed(2)} - ${stock.dayHigh?.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">52 Week Range</div>
+              <div>${stock.weekLow52?.toFixed(2)} - ${stock.weekHigh52?.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">P/E Ratio</div>
+              <div>{stock.peRatio?.toFixed(2) || 'N/A'}</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Float</div>
+              <div>{(stock.float / 1e6).toFixed(2)}M shares</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Dividend Yield</div>
+              <div>{stock.dividendYield ? `${stock.dividendYield.toFixed(2)}%` : 'N/A'}</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Beta</div>
+              <div>{stock.beta?.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Industry Rank</div>
+              <div>#{stock.industryRank || 'N/A'}</div>
+            </div>
+            {stock.isAfterHoursTrading && (
+              <div>
+                <div className="text-sm text-muted-foreground">After Hours</div>
+                <div className="flex items-center gap-1">
+                  ${stock.afterHoursPrice?.toFixed(2)}
+                  <span className={stock.afterHoursChange > 0 ? "text-green-500" : "text-red-500"}>
+                    ({stock.afterHoursChange.toFixed(2)}%)
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
