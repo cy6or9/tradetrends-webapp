@@ -67,6 +67,10 @@ export default function Home() {
     );
   };
 
+  const handleEnterPress = () => {
+    setIsMenuOpen(false); // Close the sliding menu when Enter is pressed
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile menu toggle */}
@@ -91,7 +95,7 @@ export default function Home() {
               <Badge variant="secondary">Filters Active</Badge>
             )}
           </div>
-          <StockFilters onFilterChange={handleFilterChange} />
+          <StockFilters onFilterChange={handleFilterChange} onEnterPress={handleEnterPress} />
         </div>
       </SlidingMenu>
 

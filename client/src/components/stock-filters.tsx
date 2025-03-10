@@ -103,9 +103,10 @@ type FilterValues = z.infer<typeof filterSchema>;
 
 interface StockFiltersProps {
   onFilterChange: (filters: FilterValues) => void;
+  onEnterPress?: () => void;
 }
 
-export function StockFilters({ onFilterChange }: StockFiltersProps) {
+export function StockFilters({ onFilterChange, onEnterPress }: StockFiltersProps) {
   const [searchSuggestions, setSearchSuggestions] = useState<Array<{ symbol: string; name: string }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -149,7 +150,7 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
     <Form {...form}>
       <form
         onSubmit={(e) => {
-          e.preventDefault(); // Prevent form submission
+          e.preventDefault();
           onFilterChange(form.getValues());
         }}
         onChange={() => onFilterChange(form.getValues())}
@@ -174,8 +175,9 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                     onFocus={() => field.value && setShowSuggestions(true)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        e.preventDefault(); // Prevent form submission on enter
+                        e.preventDefault();
                         onFilterChange(form.getValues());
+                        onEnterPress?.(); // Call onEnterPress when Enter is pressed
                       }
                     }}
                     className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
@@ -190,10 +192,11 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                           variant="ghost"
                           className="w-full justify-start text-left hover:bg-cyan-500/10"
                           onClick={(e) => {
-                            e.preventDefault(); // Prevent form submission
+                            e.preventDefault();
                             form.setValue("search", suggestion.symbol);
                             setShowSuggestions(false);
                             onFilterChange(form.getValues());
+                            onEnterPress?.(); // Close menu when suggestion is selected
                           }}
                         >
                           <div>
@@ -561,11 +564,11 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             )}
           />
           <Button
-            type="button" // Changed from "reset" to "button"
+            type="button"
             variant="outline"
             className="w-full hover:bg-cyan-500/10 hover:text-cyan-500 border-cyan-500/20"
             onClick={(e) => {
-              e.preventDefault(); // Prevent form submission
+              e.preventDefault();
               form.reset({
                 minPrice: "0.03",
                 sortBy: "analystRating",
