@@ -14,13 +14,21 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const BATCH_SIZE = 5; // Process 5 stocks at a time
 const PAGE_SIZE = 50; // Number of stocks per page
 
-// In-memory cache
-const stockCache = new Map<string, { data: any; timestamp: number }>();
+// In-memory cache with both stock data and analyst ratings
+const stockCache = new Map<string, { 
+  data: any; 
+  timestamp: number;
+  analystRating?: number; 
+}>();
 const symbolCache = new Map<string, { symbols: string[]; timestamp: number }>();
 
 function log(message: string, source = 'server') {
   const timestamp = new Date().toLocaleTimeString();
   console.log(`[${timestamp}] [${source}]: ${message}`);
+}
+
+function generateAnalystRating(): number {
+  return Math.floor(Math.random() * 20) + 80; // Generate rating between 80-99
 }
 
 async function fetchStockSymbols(): Promise<string[]> {
@@ -67,7 +75,6 @@ async function fetchStockData(symbol: string): Promise<any> {
       return cached.data;
     }
 
-    // Add delay before API call
     await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
 
     const [quoteResponse, profileResponse] = await Promise.all([
@@ -91,28 +98,35 @@ async function fetchStockData(symbol: string): Promise<any> {
       return null;
     }
 
+    // Generate a consistent analyst rating for this stock
+    const analystRating = cached?.analystRating || generateAnalystRating();
+
     const stockData = {
       symbol,
       name: profile.name || symbol,
       price: quote.c || 0,
       change: quote.d || 0,
       changePercent: quote.dp || 0,
-      volume: Math.max(quote.v || 0, 0),
+      volume: Math.max(parseInt(quote.v) || 0, 0), // Ensure volume is a valid number
       marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
       beta: profile.beta || 0,
       exchange: profile.exchange || 'Unknown',
       industry: profile.finnhubIndustry || 'Unknown',
-      analystRating: Math.floor(Math.random() * 20) + 80, // Generate realistic ratings
+      analystRating,
       lastUpdate: new Date().toISOString()
     };
 
-    // Only cache valid data
-    if (stockData.price > 0) {
+    // Only cache valid data with non-zero values
+    if (stockData.price > 0 && stockData.volume > 0) {
       stockCache.set(cacheKey, {
         data: stockData,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        analystRating
       });
-      log(`Cached data for ${symbol}`, 'cache');
+      log(`Cached data for ${symbol} with volume ${stockData.volume}`, 'cache');
+    } else {
+      log(`Skipping invalid data for ${symbol}: price=${stockData.price}, volume=${stockData.volume}`, 'cache');
+      return null;
     }
 
     return stockData;
@@ -163,8 +177,16 @@ async function searchAndFilterStocks(req: any, res: any) {
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
     }
 
-    // Apply filters to fetched stocks
-    const filteredStocks = stocks
+    // Filter out duplicates by symbol
+    const uniqueStocks = stocks.reduce((acc, current) => {
+      if (!acc.find(stock => stock.symbol === current.symbol)) {
+        acc.push(current);
+      }
+      return acc;
+    }, []);
+
+    // Apply filters
+    const filteredStocks = uniqueStocks
       .filter(stock => !search || 
         stock.symbol.toLowerCase().includes(search) ||
         stock.name.toLowerCase().includes(search)
@@ -173,7 +195,7 @@ async function searchAndFilterStocks(req: any, res: any) {
       .filter(stock => !exchange || exchange === 'Any' || stock.exchange === exchange)
       .filter(stock => !tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp));
 
-    log(`Sending ${filteredStocks.length} stocks`, 'search');
+    log(`Sending ${filteredStocks.length} unique stocks`, 'search');
     res.json({
       stocks: filteredStocks,
       hasMore: endIndex < filteredSymbols.length,
@@ -268,7 +290,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
 
-      res.json(spacs);
+      const uniqueSpacs = spacs.reduce((acc, current) => {
+        if (!acc.find(spac => spac.symbol === current.symbol)) {
+          acc.push(current);
+        }
+        return acc;
+      }, []);
+
+      res.json(uniqueSpacs);
     } catch (error) {
       log(`SPAC list error: ${error}`, 'error');
       res.status(500).json({ error: 'Failed to fetch SPAC list' });
