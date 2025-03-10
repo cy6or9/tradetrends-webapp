@@ -20,7 +20,6 @@ const stockCache = new Map<string, {
   timestamp: number;
   analystRating?: number; 
 }>();
-const symbolCache = new Map<string, { symbols: string[]; timestamp: number }>();
 
 function log(message: string, source = 'server') {
   const timestamp = new Date().toLocaleTimeString();
@@ -29,41 +28,6 @@ function log(message: string, source = 'server') {
 
 function generateAnalystRating(): number {
   return Math.floor(Math.random() * 20) + 80; // Generate rating between 80-99
-}
-
-async function fetchStockSymbols(): Promise<string[]> {
-  try {
-    // Check symbol cache first
-    const cached = symbolCache.get('US_STOCKS');
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return cached.symbols;
-    }
-
-    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
-    if (!response.ok) {
-      if (response.status === 429) {
-        log('Rate limit hit on symbol fetch, waiting...', 'api');
-        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 5));
-      }
-      throw new Error('Failed to fetch stock symbols');
-    }
-
-    const data = await response.json();
-    const symbols = data
-      .filter((stock: any) => stock.type === 'Common Stock')
-      .map((stock: any) => stock.symbol);
-
-    // Cache the symbols
-    symbolCache.set('US_STOCKS', {
-      symbols,
-      timestamp: Date.now()
-    });
-
-    return symbols;
-  } catch (error) {
-    log(`Error fetching symbols: ${error}`, 'error');
-    return [];
-  }
 }
 
 async function fetchStockData(symbol: string): Promise<any> {
@@ -107,7 +71,7 @@ async function fetchStockData(symbol: string): Promise<any> {
       price: quote.c || 0,
       change: quote.d || 0,
       changePercent: quote.dp || 0,
-      volume: Math.max(parseInt(quote.v) || 0, 0), // Ensure volume is a valid number
+      volume: quote.v || 0,
       marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
       beta: profile.beta || 0,
       exchange: profile.exchange || 'Unknown',
@@ -116,17 +80,14 @@ async function fetchStockData(symbol: string): Promise<any> {
       lastUpdate: new Date().toISOString()
     };
 
-    // Only cache valid data with non-zero values
-    if (stockData.price > 0 && stockData.volume > 0) {
+    // Cache the data if it has a valid price
+    if (stockData.price > 0) {
       stockCache.set(cacheKey, {
         data: stockData,
         timestamp: Date.now(),
         analystRating
       });
-      log(`Cached data for ${symbol} with volume ${stockData.volume}`, 'cache');
-    } else {
-      log(`Skipping invalid data for ${symbol}: price=${stockData.price}, volume=${stockData.volume}`, 'cache');
-      return null;
+      log(`Cached data for ${symbol}`, 'cache');
     }
 
     return stockData;
@@ -146,8 +107,15 @@ async function searchAndFilterStocks(req: any, res: any) {
 
     log('Starting stock search...', 'search');
 
-    // Get all available stock symbols
-    const symbols = await fetchStockSymbols();
+    // Get stock symbols (with basic filtering)
+    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
+    if (!response.ok) throw new Error('Failed to fetch stock symbols');
+    const data = await response.json();
+
+    const symbols = data
+      .filter((stock: any) => stock.type === 'Common Stock')
+      .map((stock: any) => stock.symbol);
+
     log(`Found ${symbols.length} total symbols`, 'search');
 
     // Filter symbols first if search is provided
@@ -177,7 +145,7 @@ async function searchAndFilterStocks(req: any, res: any) {
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
     }
 
-    // Filter out duplicates by symbol
+    // Filter out duplicates and apply filters
     const uniqueStocks = stocks.reduce((acc, current) => {
       if (!acc.find(stock => stock.symbol === current.symbol)) {
         acc.push(current);
@@ -185,7 +153,6 @@ async function searchAndFilterStocks(req: any, res: any) {
       return acc;
     }, []);
 
-    // Apply filters
     const filteredStocks = uniqueStocks
       .filter(stock => !search || 
         stock.symbol.toLowerCase().includes(search) ||
@@ -204,6 +171,53 @@ async function searchAndFilterStocks(req: any, res: any) {
   } catch (error) {
     log(`Search failed: ${error}`, 'error');
     res.status(500).json({ error: 'Failed to fetch stocks' });
+  }
+}
+
+async function fetchSpacList(): Promise<any[]> {
+  try {
+    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
+    if (!response.ok) throw new Error('Failed to fetch SPAC data');
+    const data = await response.json();
+
+    // Filter for potential SPACs with more lenient criteria
+    const spacSymbols = data
+      .filter((stock: any) => {
+        const symbol = stock.symbol.toUpperCase();
+        const description = (stock.description || '').toUpperCase();
+        return (
+          symbol.endsWith('U') || 
+          symbol.includes('SPAC') || 
+          symbol.includes('ACQ') ||
+          description.includes('SPAC') ||
+          description.includes('ACQUISITION') ||
+          description.includes('BLANK CHECK') ||
+          symbol.match(/[A-Z]{4}U$/) // Common SPAC pattern
+        );
+      })
+      .map((stock: any) => stock.symbol);
+
+    log(`Found ${spacSymbols.length} potential SPACs`, 'spac');
+
+    // Fetch detailed data for SPACs
+    const spacs = [];
+    for (const symbol of spacSymbols) {
+      const stockData = await fetchStockData(symbol);
+      if (stockData && stockData.price > 0) {
+        spacs.push({
+          ...stockData,
+          status: 'Pre-merger',
+          trustValue: Math.floor(Math.random() * 500 + 100) * 1e6,
+          targetCompany: null
+        });
+      }
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+    }
+
+    return spacs;
+  } catch (error) {
+    log(`Error fetching SPAC list: ${error}`, 'error');
+    return [];
   }
 }
 
@@ -252,52 +266,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/finnhub/spacs", async (_req: any, res: any) => {
     try {
-      const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
-      if (!response.ok) throw new Error('Failed to fetch SPAC data');
-      const data = await response.json();
-
-      // Filter for potential SPACs
-      const spacSymbols = data
-        .filter((stock: any) => {
-          const symbol = stock.symbol.toUpperCase();
-          const description = (stock.description || '').toUpperCase();
-          return (
-            symbol.endsWith('U') || 
-            symbol.includes('SPAC') || 
-            symbol.includes('ACQ') ||
-            description.includes('SPAC') ||
-            description.includes('ACQUISITION') ||
-            description.includes('BLANK CHECK')
-          );
-        })
-        .map((stock: any) => stock.symbol)
-        .slice(0, 50); // Limit to first 50 SPACs to avoid rate limits
-
-      log(`Found ${spacSymbols.length} potential SPACs`, 'spac');
-
-      // Fetch detailed data for each SPAC
-      const spacs = [];
-      for (const symbol of spacSymbols) {
-        const stockData = await fetchStockData(symbol);
-        if (stockData) {
-          spacs.push({
-            ...stockData,
-            status: 'Pre-merger',
-            trustValue: Math.floor(Math.random() * 500 + 100) * 1e6,
-            targetCompany: null
-          });
-        }
-        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      }
-
-      const uniqueSpacs = spacs.reduce((acc, current) => {
-        if (!acc.find(spac => spac.symbol === current.symbol)) {
-          acc.push(current);
-        }
-        return acc;
-      }, []);
-
-      res.json(uniqueSpacs);
+      const spacs = await fetchSpacList();
+      res.json(spacs);
     } catch (error) {
       log(`SPAC list error: ${error}`, 'error');
       res.status(500).json({ error: 'Failed to fetch SPAC list' });
