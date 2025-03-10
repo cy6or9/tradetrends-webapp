@@ -83,19 +83,15 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
-      // Normalize analyst ratings to be more realistic (0-100 scale)
-      const normalizedStocks = cachedStocks.map(stock => ({
-        ...stock,
-        // Normalize analyst rating to be more realistic (max 95%)
-        analystRating: Math.min(Math.round((stock.analystRating / 100) * 95), 95)
-      }));
-
-      const hotStocks = normalizedStocks.filter(stock =>
-        (stock.analystRating >= 85 && Math.abs(stock.changePercent) >= 2) ||
-        stock.analystRating >= 90
+      const hotStocks = cachedStocks.filter(stock =>
+        // Type 1: High rating with significant movement
+        (stock.analystRating >= 90 && Math.abs(stock.changePercent) >= 2) ||
+        // Type 2: Exceptional rating regardless of movement
+        stock.analystRating >= 95
       ).sort((a, b) => {
-        const aIsType1 = a.analystRating >= 85 && Math.abs(a.changePercent) >= 2;
-        const bIsType1 = b.analystRating >= 85 && Math.abs(b.changePercent) >= 2;
+        // Sort by criteria type first, then by rating
+        const aIsType1 = a.analystRating >= 90 && Math.abs(a.changePercent) >= 2;
+        const bIsType1 = b.analystRating >= 90 && Math.abs(b.changePercent) >= 2;
         if (aIsType1 && !bIsType1) return -1;
         if (!aIsType1 && bIsType1) return 1;
         return b.analystRating - a.analystRating;
@@ -134,20 +130,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
       const data = await response.json();
 
       if (data.stocks?.length > 0) {
-        const normalizedStocks = data.stocks.map(stock => ({
-          ...stock,
-          // Normalize analyst rating to be more realistic (max 95%)
-          analystRating: Math.min(Math.round((stock.analystRating / 100) * 95), 95)
-        }));
-        stockCache.updateStocks(normalizedStocks);
+        stockCache.updateStocks(data.stocks);
       }
 
       return {
         ...data,
-        stocks: data.stocks.map(stock => ({
-          ...stock,
-          analystRating: Math.min(Math.round((stock.analystRating / 100) * 95), 95)
-        }))
+        stocks: data.stocks
       };
     } catch (error) {
       console.error('Error fetching stocks:', error);

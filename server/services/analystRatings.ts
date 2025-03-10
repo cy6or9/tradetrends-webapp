@@ -11,6 +11,13 @@ interface AnalystRating {
   strongSell: number;
   period: string;
   lastUpdated: Date;
+  priceTargets?: {
+    targetHigh: number;
+    targetLow: number;
+    targetMean: number;
+    targetMedian: number;
+    lastUpdated: Date;
+  };
 }
 
 class AnalystRatingService {
@@ -30,24 +37,61 @@ class AnalystRatingService {
     return AnalystRatingService.instance;
   }
 
-  // Calculate normalized rating (0-100)
-  private calculateRating(rating: AnalystRating): number {
-    const total = rating.strongBuy + rating.buy + rating.hold + rating.sell + rating.strongSell;
-    if (total === 0) return 0;
+  // Calculate analyst rating based on multiple factors
+  private async calculateRating(rating: AnalystRating, currentPrice?: number): Promise<number> {
+    try {
+      const total = rating.strongBuy + rating.buy + rating.hold + rating.sell + rating.strongSell;
+      if (total === 0) return 0;
 
-    // Weight the different ratings
-    const weightedSum = (
-      (rating.strongBuy * 100) +
-      (rating.buy * 75) +
-      (rating.hold * 50) +
-      (rating.sell * 25) +
-      (rating.strongSell * 0)
-    );
+      // Base rating calculation from recommendations (0-100)
+      // Strong Buy/Sell have highest weight to reflect strong conviction
+      const recommendationScore = (
+        (rating.strongBuy * 125) +   // 125% weight for strong conviction buys
+        (rating.buy * 100) +         // 100% weight for regular buys
+        (rating.hold * 50) +         // 50% weight for holds
+        (rating.sell * 0) +          // 0% weight for sells
+        (rating.strongSell * -25)    // -25% penalty for strong sells
+      ) / (total * 1.25);            // Normalize to 0-100 scale
 
-    return Math.round((weightedSum / total));
+      // Get price targets if available and not already cached
+      if (!rating.priceTargets && currentPrice) {
+        try {
+          const priceTargets = await finnhubClient.priceTarget(rating.symbol);
+          if (priceTargets) {
+            rating.priceTargets = {
+              targetHigh: priceTargets.targetHigh,
+              targetLow: priceTargets.targetLow,
+              targetMean: priceTargets.targetMean,
+              targetMedian: priceTargets.targetMedian,
+              lastUpdated: new Date()
+            };
+          }
+        } catch (error) {
+          console.error(`Error fetching price targets for ${rating.symbol}:`, error);
+        }
+      }
+
+      // Factor in price targets if available
+      let finalScore = recommendationScore;
+      if (rating.priceTargets && currentPrice) {
+        const priceTargetScore = ((rating.priceTargets.targetMean / currentPrice) - 1) * 100;
+        // Weight price targets at 30% of the final score
+        finalScore = (recommendationScore * 0.7) + (Math.min(Math.max(priceTargetScore, 0), 100) * 0.3);
+      }
+
+      // Quality factors
+      const analystCoverageScore = Math.min(total / 20, 1); // Max score at 20+ analysts
+      finalScore *= analystCoverageScore; // Reduce score if low analyst coverage
+
+      // Ensure the final score is between 0 and 100
+      return Math.round(Math.max(Math.min(finalScore, 100), 0));
+    } catch (error) {
+      console.error(`Error calculating rating for ${rating.symbol}:`, error);
+      return 0;
+    }
   }
 
-  async updateRating(symbol: string): Promise<number> {
+  async updateRating(symbol: string, currentPrice?: number): Promise<number> {
     try {
       const response = await finnhubClient.recommendationTrends(symbol);
       if (!response || !response[0]) {
@@ -55,6 +99,7 @@ class AnalystRatingService {
         return 0;
       }
 
+      // Get the most recent recommendation
       const latestRating = response[0];
       const rating: AnalystRating = {
         symbol,
@@ -67,9 +112,9 @@ class AnalystRatingService {
         lastUpdated: new Date()
       };
 
-      const normalizedRating = this.calculateRating(rating);
+      const normalizedRating = await this.calculateRating(rating, currentPrice);
       this.ratingsCache.set(symbol, rating);
-      
+
       console.log(`Updated analyst rating for ${symbol}: ${normalizedRating}%`);
       return normalizedRating;
     } catch (error) {
@@ -78,15 +123,15 @@ class AnalystRatingService {
     }
   }
 
-  async getRating(symbol: string): Promise<number> {
+  async getRating(symbol: string, currentPrice?: number): Promise<number> {
     const cached = this.ratingsCache.get(symbol);
-    
+
     // If no cached data or data is older than 6 hours, fetch new data
     if (!cached || Date.now() - cached.lastUpdated.getTime() > 6 * 60 * 60 * 1000) {
-      return this.updateRating(symbol);
+      return this.updateRating(symbol, currentPrice);
     }
 
-    return this.calculateRating(cached);
+    return this.calculateRating(cached, currentPrice);
   }
 
   startPeriodicUpdates(symbols: string[]) {
