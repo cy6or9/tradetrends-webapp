@@ -151,7 +151,10 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                       type="checkbox"
                       checked={field.value}
                       onChange={field.onChange}
-                      className="form-checkbox h-4 w-4 text-cyan-500 border-cyan-500/20"
+                      className={cn(
+                        "form-checkbox h-4 w-4 border-cyan-500/20",
+                        field.value ? "bg-background text-cyan-500" : "text-cyan-500"
+                      )}
                     />
                   </FormControl>
                   <FormLabel className="text-cyan-500 mb-0">New Listings Only</FormLabel>
@@ -168,7 +171,10 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                       type="checkbox"
                       checked={field.value}
                       onChange={field.onChange}
-                      className="form-checkbox h-4 w-4 text-cyan-500 border-cyan-500/20"
+                      className={cn(
+                        "form-checkbox h-4 w-4 border-cyan-500/20",
+                        field.value ? "bg-background text-cyan-500" : "text-cyan-500"
+                      )}
                     />
                   </FormControl>
                   <FormLabel className="text-cyan-500 mb-0">After Hours Trading Only</FormLabel>

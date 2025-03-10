@@ -320,6 +320,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/finnhub/spacs", async (_req: any, res: any) => {
+    try {
+      const symbolsData = await finnhubRequest('/stock/symbol?exchange=US');
+      if (!symbolsData) throw new Error('Failed to fetch SPAC data');
+
+      // Filter for potential SPACs
+      const spacSymbols = symbolsData
+        .filter((stock: any) => {
+          const symbol = stock.symbol.toUpperCase();
+          const description = (stock.description || '').toUpperCase();
+          return (
+            symbol.endsWith('U') ||
+            symbol.includes('SPAC') ||
+            symbol.includes('ACQ') ||
+            description.includes('SPAC') ||
+            description.includes('ACQUISITION') ||
+            description.includes('BLANK CHECK')
+          );
+        })
+        .map((stock: any) => stock.symbol);
+
+      log(`Found ${spacSymbols.length} potential SPACs`, 'spac');
+
+      // Get SPAC data
+      const spacs = [];
+      for (const symbol of spacSymbols.slice(0, 50)) { // Limit to first 50 to avoid rate limits
+        const stockData = await storage.getStockBySymbol(symbol);
+        if (stockData) {
+          spacs.push({
+            ...stockData,
+            status: 'Pre-merger',
+            trustValue: Math.floor(Math.random() * 500 + 100) * 1e6, // Random trust value for demo
+            targetCompany: null
+          });
+        } else {
+          const newStockData = await fetchStockData(symbol);
+          if (newStockData) {
+            spacs.push({
+              ...newStockData,
+              status: 'Pre-merger',
+              trustValue: Math.floor(Math.random() * 500 + 100) * 1e6,
+              targetCompany: null
+            });
+          }
+        }
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      }
+
+      res.json(spacs);
+    } catch (error) {
+      log(`SPAC list error: ${error}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch SPAC list' });
+    }
+  });
+
   return httpServer;
 }
 

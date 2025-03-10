@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
@@ -17,6 +17,11 @@ import type { Stock } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { stockCache } from "@/lib/stockCache";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 
 interface StockListProps {
   filters: {
@@ -66,8 +71,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const queryClient = useQueryClient();
   const [isTabActive, setIsTabActive] = useState(true);
 
+  const handleSort = (key: keyof Stock) => {
+    setSort(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
   useEffect(() => {
-    // Handle tab visibility changes
     const handleVisibilityChange = () => {
       setIsTabActive(!document.hidden);
     };
@@ -78,11 +89,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, []);
 
   const fetchStocks = async ({ pageParam = 1 }) => {
-    // Check cache first
     if (pageParam === 1) {
       const cachedStocks = stockCache.getAllStocks();
       if (cachedStocks.length > 0) {
-        // Apply hot stocks filter if needed
         if (filters.isHotStock) {
           const hotStocks = cachedStocks.filter(stock => 
             stock.analystRating >= 80 && 
@@ -117,10 +126,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (!response.ok) throw new Error('Failed to fetch stocks');
     const data = await response.json();
 
-    // Update cache with new data
     stockCache.updateStocks(data.stocks);
 
-    // Apply hot stocks filter if needed
     if (filters.isHotStock) {
       data.stocks = data.stocks.filter(stock => 
         stock.analystRating >= 80 && 
@@ -151,14 +158,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
     initialPageParam: 1,
   });
 
-  // Get unique stocks from all pages
   const allStocks = data?.pages.reduce((acc, page) => {
     const seenSymbols = new Set(acc.map(s => s.symbol));
     const newStocks = page.stocks.filter(s => !seenSymbols.has(s.symbol));
     return [...acc, ...newStocks];
   }, [] as Stock[]) ?? [];
 
-  // Sort stocks
   const sortedStocks = [...allStocks].sort((a, b) => {
     const aVal = a[sort.key];
     const bVal = b[sort.key];
@@ -173,7 +178,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return 0;
   });
 
-  // Update parent component with stock count
   useEffect(() => {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
@@ -188,6 +192,15 @@ export function StockList({ filters, setStocks }: StockListProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/stocks'] });
     }
+  });
+
+  const [columnSizes, setColumnSizes] = useState({
+    symbol: 15,
+    name: 25,
+    price: 15,
+    change: 15,
+    rating: 15,
+    volume: 15,
   });
 
   if (isError) {
@@ -223,42 +236,56 @@ export function StockList({ filters, setStocks }: StockListProps) {
         </div>
       )}
       <div className="w-full overflow-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
-                  Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
-                  Name <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium">
-                  Price <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium">
-                  Change % <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium">
-                  Analyst Rating <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium">
-                  Volume <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <ResizablePanelGroup direction="horizontal">
+          <ResizablePanel defaultSize={columnSizes.symbol}>
+            <TableHead>
+              <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full">
+                Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel defaultSize={columnSizes.name}>
+            <TableHead>
+              <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full">
+                Name <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel defaultSize={columnSizes.price}>
+            <TableHead>
+              <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full">
+                Price <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel defaultSize={columnSizes.change}>
+            <TableHead>
+              <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full">
+                Change % <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel defaultSize={columnSizes.rating}>
+            <TableHead>
+              <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium w-full">
+                Analyst Rating <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel defaultSize={columnSizes.volume}>
+            <TableHead>
+              <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full">
+                Volume <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+        <TableBody>
             {sortedStocks.map((stock) => (
               <TableRow
                 key={stock.symbol}
@@ -309,8 +336,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
-
         {/* Loading indicator and intersection observer target */}
         <div ref={loadMoreRef} className="py-4 text-center">
           {isFetchingNextPage && (
