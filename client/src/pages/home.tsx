@@ -7,7 +7,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { SlidingMenu } from "@/components/sliding-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Menu } from "lucide-react";
+import { Menu, ChevronDown, ChevronRight, Star } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { IpoCalendar } from "@/components/ipo-calendar";
 import { SpacList } from "@/components/spac-list";
@@ -34,6 +34,7 @@ export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("stocks");
   const [allStocksCount, setAllStocksCount] = useState(0);
+  const [allStocksExpanded, setAllStocksExpanded] = useState(false);
   const [stocks, setStocks] = useState<any[]>([]); //Retaining the original stocks state
 
   // Hot stocks filter - stocks with high analyst ratings and recent movement
@@ -82,6 +83,14 @@ export default function Home() {
             </CardHeader>
           </Card>
 
+          {/* Favorites List */}
+          <div>
+            <h2 className="text-xl font-semibold text-cyan-500 mb-2 flex items-center gap-2">
+              <Star className="h-5 w-5 fill-current" /> Favorites
+            </h2>
+            <StockList filters={{ isFavorite: true }} />
+          </div>
+
           {/* Market sections */}
           <div className="w-full">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -118,10 +127,28 @@ export default function Home() {
             </Tabs>
           </div>
 
-          {/* Main stock list - all traceable stocks */}
+          {/* All Stocks - Collapsible */}
           <div className="mt-2">
-            <h2 className="text-xl font-semibold text-cyan-500 mb-2">All Stocks</h2>
-            <StockList filters={filters} setStocks={(stocks) => setAllStocksCount(stocks.length)} />
+            <Button
+              variant="ghost"
+              className="w-full flex justify-between items-center py-2 text-xl font-semibold text-cyan-500"
+              onClick={() => setAllStocksExpanded(!allStocksExpanded)}
+            >
+              <div className="flex items-center gap-2">
+                <span>All Stocks</span>
+                <span className="text-sm text-muted-foreground">({allStocksCount} stocks)</span>
+              </div>
+              {allStocksExpanded ? (
+                <ChevronDown className="h-5 w-5" />
+              ) : (
+                <ChevronRight className="h-5 w-5" />
+              )}
+            </Button>
+            {allStocksExpanded && (
+              <div className="mt-2">
+                <StockList filters={filters} setStocks={(stocks) => setAllStocksCount(stocks.length)} />
+              </div>
+            )}
           </div>
         </div>
       </div>

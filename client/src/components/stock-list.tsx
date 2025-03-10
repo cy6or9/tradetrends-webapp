@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import {
@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Star, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Stock } from "@shared/schema";
+import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
 
 interface StockListProps {
   filters: {
@@ -35,6 +37,7 @@ interface StockListProps {
     tradingApp?: string;
     industry?: string;
     exchange?: string;
+    isFavorite?: boolean;
   };
   setStocks?: (stocks: Stock[]) => void;
 }
@@ -57,6 +60,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
 
   const fetchStocks = async ({ pageParam = 1 }) => {
     const searchParams = new URLSearchParams({
@@ -165,6 +169,19 @@ export function StockList({ filters, setStocks }: StockListProps) {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
 
+  const toggleFavoriteMutation = useMutation({
+    mutationFn: async (stockId: number) => {
+      const response = await apiRequest(`/api/stocks/${stockId}/favorite`, {
+        method: 'POST'
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/stocks'] });
+    }
+  });
+
+
   if (isError) {
     return (
       <div className="p-8 text-center text-red-500">
@@ -228,11 +245,27 @@ export function StockList({ filters, setStocks }: StockListProps) {
               <TableRow
                 key={stock.symbol}
                 className="cursor-pointer hover:bg-muted/50"
-                onClick={() => navigate(`/stock/${stock.symbol}`)}
               >
-                <TableCell className="font-medium flex items-center gap-2">
-                  {stock.symbol}
-                  {stock.isFavorite && <Star className="w-4 h-4 text-yellow-500" />}
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavoriteMutation.mutate(stock.id);
+                      }}
+                    >
+                      <Star
+                        className={cn(
+                          "h-4 w-4",
+                          stock.isFavorite ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
+                        )}
+                      />
+                    </Button>
+                    {stock.symbol}
+                  </div>
                 </TableCell>
                 <TableCell>{stock.name}</TableCell>
                 <TableCell>${stock.price.toFixed(2)}</TableCell>

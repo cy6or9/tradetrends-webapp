@@ -32,6 +32,21 @@ export const favorites = pgTable("favorites", {
   notifyOnRating: boolean("notify_on_rating").default(false),
 });
 
+export const customLists = pgTable("custom_lists", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const listStocks = pgTable("list_stocks", {
+  id: serial("id").primaryKey(),
+  listId: integer("list_id").notNull().references(() => customLists.id),
+  stockId: integer("stock_id").notNull().references(() => stocks.id),
+  addedAt: timestamp("added_at").notNull().defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -41,10 +56,16 @@ export const users = pgTable("users", {
 export const insertStockSchema = createInsertSchema(stocks);
 export const insertFavoriteSchema = createInsertSchema(favorites);
 export const insertUserSchema = createInsertSchema(users);
+export const insertCustomListSchema = createInsertSchema(customLists);
+export const insertListStockSchema = createInsertSchema(listStocks);
 
 export type Stock = typeof stocks.$inferSelect;
 export type Favorite = typeof favorites.$inferSelect;
 export type User = typeof users.$inferSelect;
+export type CustomList = typeof customLists.$inferSelect;
+export type ListStock = typeof listStocks.$inferSelect;
 export type InsertStock = z.infer<typeof insertStockSchema>;
 export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertCustomList = z.infer<typeof insertCustomListSchema>;
+export type InsertListStock = z.infer<typeof insertListStockSchema>;
