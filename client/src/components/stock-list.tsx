@@ -51,12 +51,23 @@ export function StockList({ filters, setStocks }: StockListProps) {
     key: keyof Stock;
     direction: 'asc' | 'desc';
   }>({ key: 'analystRating', direction: 'desc' });
+
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
 
-  const fetchStocks = async ({ pageParam = 1 }) => {
-    console.log('Fetching page:', pageParam);
-    try {
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    error,
+    refetch
+  } = useInfiniteQuery({
+    queryKey: ["/api/stocks", filters],
+    queryFn: async ({ pageParam = 1 }) => {
+      console.log('Fetching page:', pageParam);
       const searchParams = new URLSearchParams({
         page: pageParam.toString(),
         ...(filters.search && { search: filters.search }),
@@ -73,31 +84,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
       const data = await response.json();
       console.log('Received data:', data);
-
-      if (!data || !data.stocks || !Array.isArray(data.stocks)) {
-        console.error('Invalid data format:', data);
-        throw new Error('Invalid response format');
-      }
-
       return data;
-    } catch (error) {
-      console.error('Error fetching stocks:', error);
-      throw error;
-    }
-  };
-
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isError,
-    error,
-    refetch
-  } = useInfiniteQuery({
-    queryKey: ["/api/stocks", filters],
-    queryFn: fetchStocks,
+    },
     getNextPageParam: (lastPage) => {
       if (!lastPage.hasMore) return undefined;
       return lastPage.total > (lastPage.stocks?.length || 0) ? Math.ceil(lastPage.stocks.length / 50) + 1 : undefined;
@@ -139,6 +127,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }));
   };
 
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
   if (isError) {
     console.error('Stock list error:', error);
     return (
@@ -155,14 +147,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
     );
   }
 
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  // Flatten all stocks from all pages
+  // Get all stocks from all pages
   const allStocks = data?.pages.flatMap(page => page.stocks) || [];
 
-  // Apply client-side filters
+  // Apply filters
   const filteredStocks = allStocks.filter((stock) => {
     if (!stock) return false;
     if (filters.minPrice && stock.price < filters.minPrice) return false;
@@ -194,7 +182,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return 0;
   });
 
-  // Update parent component with stock count
+  // Update parent component with current stocks
   useEffect(() => {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
