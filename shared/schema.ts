@@ -2,12 +2,6 @@ import { pgTable, text, serial, integer, boolean, real, timestamp } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-});
-
 export const stocks = pgTable("stocks", {
   id: serial("id").primaryKey(),
   symbol: text("symbol").notNull().unique(),
@@ -26,6 +20,9 @@ export const stocks = pgTable("stocks", {
   earningsDate: timestamp("earnings_date"),
   lastUpdate: timestamp("last_update").notNull().defaultNow(),
   nextUpdate: timestamp("next_update").notNull(),
+  firstListed: timestamp("first_listed").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  cached_data: text("cached_data"), // JSON string of additional data
 });
 
 export const favorites = pgTable("favorites", {
@@ -35,13 +32,19 @@ export const favorites = pgTable("favorites", {
   notifyOnRating: boolean("notify_on_rating").default(false),
 });
 
-export const insertUserSchema = createInsertSchema(users);
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+});
+
 export const insertStockSchema = createInsertSchema(stocks);
 export const insertFavoriteSchema = createInsertSchema(favorites);
+export const insertUserSchema = createInsertSchema(users);
 
-export type User = typeof users.$inferSelect;
 export type Stock = typeof stocks.$inferSelect;
 export type Favorite = typeof favorites.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
 export type InsertStock = z.infer<typeof insertStockSchema>;
 export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
+export type InsertUser = z.infer<typeof insertUserSchema>;

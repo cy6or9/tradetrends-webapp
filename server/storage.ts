@@ -1,4 +1,6 @@
-import { users, stocks, favorites, type User, type Stock, type Favorite, type InsertUser, type InsertStock, type InsertFavorite } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, gt, desc } from "drizzle-orm";
+import { stocks, favorites, users, type Stock, type Favorite, type User, type InsertStock, type InsertFavorite, type InsertUser } from "@shared/schema";
 
 export interface IStorage {
   // Users
@@ -12,6 +14,8 @@ export interface IStorage {
   getStockBySymbol(symbol: string): Promise<Stock | undefined>;
   upsertStock(stock: InsertStock): Promise<Stock>;
   updateStockPrice(id: number, price: number, changePercent: number): Promise<Stock>;
+  getNewListings(since: Date): Promise<Stock[]>;
+  getActiveStocks(): Promise<Stock[]>;
 
   // Favorites
   getFavorites(userId: number): Promise<Favorite[]>;
@@ -20,110 +24,139 @@ export interface IStorage {
   updateFavoriteNotifications(userId: number, stockId: number, notify: boolean): Promise<Favorite>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private stocks: Map<number, Stock>;
-  private favorites: Map<number, Favorite>;
-  private currentIds: { [key: string]: number };
-
-  constructor() {
-    this.users = new Map();
-    this.stocks = new Map();
-    this.favorites = new Map();
-    this.currentIds = { users: 1, stocks: 1, favorites: 1 };
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentIds.users++;
-    const user = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async getStocks(): Promise<Stock[]> {
-    return Array.from(this.stocks.values());
+    return db.select().from(stocks).where(eq(stocks.isActive, true));
   }
 
   async getStock(id: number): Promise<Stock | undefined> {
-    return this.stocks.get(id);
+    const [stock] = await db.select().from(stocks).where(eq(stocks.id, id));
+    return stock;
   }
 
   async getStockBySymbol(symbol: string): Promise<Stock | undefined> {
-    return Array.from(this.stocks.values()).find(
-      (stock) => stock.symbol === symbol,
-    );
+    const [stock] = await db.select().from(stocks).where(eq(stocks.symbol, symbol));
+    return stock;
   }
 
   async upsertStock(insertStock: InsertStock): Promise<Stock> {
     const existing = await this.getStockBySymbol(insertStock.symbol);
+
     if (existing) {
-      const updated = { ...existing, ...insertStock };
-      this.stocks.set(existing.id, updated);
+      const [updated] = await db
+        .update(stocks)
+        .set({
+          ...insertStock,
+          lastUpdate: new Date(),
+          nextUpdate: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes from now
+        })
+        .where(eq(stocks.symbol, insertStock.symbol))
+        .returning();
       return updated;
     }
-    
-    const id = this.currentIds.stocks++;
-    const stock = { ...insertStock, id };
-    this.stocks.set(id, stock);
+
+    const [stock] = await db
+      .insert(stocks)
+      .values({
+        ...insertStock,
+        firstListed: new Date(),
+        lastUpdate: new Date(),
+        nextUpdate: new Date(Date.now() + 5 * 60 * 1000),
+        isActive: true,
+      })
+      .returning();
     return stock;
   }
 
   async updateStockPrice(id: number, price: number, changePercent: number): Promise<Stock> {
-    const stock = await this.getStock(id);
-    if (!stock) throw new Error(`Stock ${id} not found`);
-    
-    const updated = { 
-      ...stock, 
-      price, 
-      changePercent,
-      lastUpdated: new Date()
-    };
-    this.stocks.set(id, updated);
+    const [updated] = await db
+      .update(stocks)
+      .set({
+        price,
+        changePercent,
+        lastUpdate: new Date(),
+        nextUpdate: new Date(Date.now() + 5 * 60 * 1000),
+      })
+      .where(eq(stocks.id, id))
+      .returning();
     return updated;
   }
 
+  async getNewListings(since: Date): Promise<Stock[]> {
+    return db
+      .select()
+      .from(stocks)
+      .where(
+        and(
+          eq(stocks.isActive, true),
+          gt(stocks.firstListed, since)
+        )
+      )
+      .orderBy(desc(stocks.firstListed));
+  }
+
+  async getActiveStocks(): Promise<Stock[]> {
+    return db
+      .select()
+      .from(stocks)
+      .where(eq(stocks.isActive, true))
+      .orderBy(desc(stocks.lastUpdate));
+  }
+
   async getFavorites(userId: number): Promise<Favorite[]> {
-    return Array.from(this.favorites.values()).filter(
-      (fav) => fav.userId === userId,
-    );
+    return db
+      .select()
+      .from(favorites)
+      .where(eq(favorites.userId, userId));
   }
 
   async addFavorite(insertFavorite: InsertFavorite): Promise<Favorite> {
-    const id = this.currentIds.favorites++;
-    const favorite = { ...insertFavorite, id };
-    this.favorites.set(id, favorite);
+    const [favorite] = await db
+      .insert(favorites)
+      .values(insertFavorite)
+      .returning();
     return favorite;
   }
 
   async removeFavorite(userId: number, stockId: number): Promise<void> {
-    const favorite = Array.from(this.favorites.values()).find(
-      (fav) => fav.userId === userId && fav.stockId === stockId,
-    );
-    if (favorite) {
-      this.favorites.delete(favorite.id);
-    }
+    await db
+      .delete(favorites)
+      .where(
+        and(
+          eq(favorites.userId, userId),
+          eq(favorites.stockId, stockId)
+        )
+      );
   }
 
   async updateFavoriteNotifications(userId: number, stockId: number, notify: boolean): Promise<Favorite> {
-    const favorite = Array.from(this.favorites.values()).find(
-      (fav) => fav.userId === userId && fav.stockId === stockId,
-    );
-    if (!favorite) throw new Error("Favorite not found");
-    
-    const updated = { ...favorite, notifyOnRating: notify };
-    this.favorites.set(favorite.id, updated);
+    const [updated] = await db
+      .update(favorites)
+      .set({ notifyOnRating: notify })
+      .where(
+        and(
+          eq(favorites.userId, userId),
+          eq(favorites.stockId, stockId)
+        )
+      )
+      .returning();
     return updated;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
