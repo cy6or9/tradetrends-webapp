@@ -140,6 +140,43 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             )}
           />
 
+          <div className="flex flex-col gap-2">
+            <FormField
+              control={form.control}
+              name="newOnly"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2">
+                  <FormControl>
+                    <input
+                      type="checkbox"
+                      checked={field.value}
+                      onChange={field.onChange}
+                      className="form-checkbox h-4 w-4 text-cyan-500 border-cyan-500/20"
+                    />
+                  </FormControl>
+                  <FormLabel className="text-cyan-500 mb-0">New Listings Only</FormLabel>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="afterHoursOnly"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2">
+                  <FormControl>
+                    <input
+                      type="checkbox"
+                      checked={field.value}
+                      onChange={field.onChange}
+                      className="form-checkbox h-4 w-4 text-cyan-500 border-cyan-500/20"
+                    />
+                  </FormControl>
+                  <FormLabel className="text-cyan-500 mb-0">After Hours Trading Only</FormLabel>
+                </FormItem>
+              )}
+            />
+          </div>
+
           <FormField
             control={form.control}
             name="exchange"
@@ -166,7 +203,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="tradingApp"
@@ -193,7 +229,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="industry"
@@ -220,7 +255,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="minPrice"
@@ -238,7 +272,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="maxPrice"
@@ -256,7 +289,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="minChangePercent"
@@ -274,7 +306,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="maxChangePercent"
@@ -292,7 +323,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="minAnalystRating"
@@ -310,7 +340,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="minVolume"
@@ -328,7 +357,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="maxVolume"
@@ -346,7 +374,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="minMarketCap"
@@ -364,7 +391,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="maxMarketCap"
@@ -382,7 +408,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="minBeta"
@@ -400,7 +425,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="maxBeta"
@@ -418,7 +442,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="sortBy"
@@ -443,7 +466,6 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="sortDir"
@@ -464,67 +486,32 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="newOnly"
-            render={({ field }) => (
-              <FormItem className="flex items-center gap-2">
-                <FormLabel className="text-cyan-500">New Listings Only</FormLabel>
-                <FormControl>
-                  <input
-                    type="checkbox"
-                    checked={field.value}
-                    onChange={field.onChange}
-                    className="form-checkbox h-4 w-4 text-cyan-500 border-cyan-500/20"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="afterHoursOnly"
-            render={({ field }) => (
-              <FormItem className="flex items-center gap-2">
-                <FormLabel className="text-cyan-500">After Hours Trading Only</FormLabel>
-                <FormControl>
-                  <input
-                    type="checkbox"
-                    checked={field.value}
-                    onChange={field.onChange}
-                    className="form-checkbox h-4 w-4 text-cyan-500 border-cyan-500/20"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
+          <Button
+            type="reset"
+            variant="outline"
+            className="w-full hover:bg-cyan-500/10 hover:text-cyan-500 border-cyan-500/20"
+            onClick={() => {
+              form.reset({
+                minPrice: "0.03",
+                sortBy: "analystRating",
+                sortDir: "desc",
+                exchange: "Any",
+                industry: "Any",
+                tradingApp: "Any",
+              });
+              onFilterChange({
+                minPrice: "0.03",
+                sortBy: "analystRating",
+                sortDir: "desc",
+                exchange: "Any",
+                industry: "Any",
+                tradingApp: "Any",
+              });
+            }}
+          >
+            Reset Filters
+          </Button>
         </div>
-
-        <Button
-          type="reset"
-          variant="outline"
-          className="w-full hover:bg-cyan-500/10 hover:text-cyan-500 border-cyan-500/20"
-          onClick={() => {
-            form.reset({
-              minPrice: "0.03",
-              sortBy: "analystRating",
-              sortDir: "desc",
-              exchange: "Any",
-              industry: "Any",
-              tradingApp: "Any",
-            });
-            onFilterChange({
-              minPrice: "0.03",
-              sortBy: "analystRating",
-              sortDir: "desc",
-              exchange: "Any",
-              industry: "Any",
-              tradingApp: "Any",
-            });
-          }}
-        >
-          Reset Filters
-        </Button>
       </form>
     </Form>
   );

@@ -91,6 +91,7 @@ async function fetchStockData(symbol: string): Promise<any> {
       lastUpdate: new Date(),
       nextUpdate: new Date(Date.now() + 5 * 60 * 1000),
       isActive: true,
+      isFavorite: false,
       cached_data: JSON.stringify({
         peers: peers || [],
         metrics: basic?.metric || {}
@@ -128,7 +129,7 @@ async function checkNewListings(): Promise<void> {
     if (newListings.length > 0) {
       log(`Found ${newListings.length} new listings`, 'newListings');
       // Process new listings
-      for (const symbol of newListings) {
+      for (const symbol of newListings.slice(0, 100)) { // Limit to first 100 new listings
         await fetchStockData(symbol);
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
@@ -136,90 +137,31 @@ async function checkNewListings(): Promise<void> {
 
     log('Finished checking new listings', 'newListings');
   } catch (error) {
-    log(`Error checking new listings: ${error}`, 'error');
+    log(`Error checking new listings: ${error}`, 'newListings');
   }
-}
-
-async function searchAndFilterStocks(req: any, res: any) {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
-    const search = req.query.search?.toLowerCase();
-    const tradingApp = req.query.tradingApp;
-    const industry = req.query.industry;
-    const exchange = req.query.exchange;
-    const showNewOnly = req.query.newOnly === 'true';
-
-    log('Starting stock search...', 'search');
-
-    // Get stocks from database
-    let stocks = await storage.getActiveStocks();
-
-    // Apply filters
-    stocks = stocks.filter(stock =>
-      (!search ||
-        stock.symbol.toLowerCase().includes(search) ||
-        stock.name.toLowerCase().includes(search)
-      ) &&
-      (!industry || industry === 'Any' || stock.industry === industry) &&
-      (!exchange || exchange === 'Any' || stock.exchange === exchange) &&
-      (!tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp))
-    );
-
-    // Handle favorites filter
-    if (req.query.isFavorite === 'true') {
-      const userFavorites = await storage.getFavorites(req.session?.userId || 0);
-      const favoriteStockIds = new Set(userFavorites.map(f => f.stockId));
-      stocks = stocks.filter(stock => favoriteStockIds.has(stock.id));
-    }
-
-    // Update prices for displayed stocks
-    for (const stock of stocks.slice((page - 1) * limit, page * limit)) {
-      if (new Date(stock.nextUpdate) <= new Date()) {
-        fetchStockData(stock.symbol).catch(console.error); // Update async
-      }
-    }
-
-    // Calculate pagination
-    const total = stocks.length;
-    const startIndex = (page - 1) * limit;
-    const endIndex = Math.min(startIndex + limit, total);
-    const paginatedStocks = stocks.slice(startIndex, endIndex);
-
-    log(`Sending ${paginatedStocks.length} stocks`, 'search');
-    res.json({
-      stocks: paginatedStocks,
-      hasMore: endIndex < total,
-      total
-    });
-  } catch (error) {
-    log(`Search failed: ${error}`, 'error');
-    res.status(500).json({ error: 'Failed to fetch stocks' });
-  }
-}
-
-function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
-  return true; // For demo purposes, assume all stocks are available on all platforms
 }
 
 async function initializeStocks(): Promise<void> {
   try {
     log('Initializing stock database...', 'init');
+    let initializedCount = 0;
     for (const symbol of INITIAL_STOCKS) {
       const stockData = await fetchStockData(symbol);
       if (stockData) {
         await storage.upsertStock({
           ...stockData,
           firstListed: new Date(),
-          isActive: true
+          isActive: true,
+          isFavorite: false
         });
         log(`Initialized ${symbol}`, 'init');
+        initializedCount++;
       }
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
     }
-    log('Stock database initialized', 'init');
+    log(`Stock database initialized with ${initializedCount} stocks`, 'init');
   } catch (error) {
-    log(`Error initializing stocks: ${error}`, 'error');
+    log(`Error initializing stocks: ${error}`, 'init');
   }
 }
 
@@ -246,6 +188,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on('error', (error) => {
       log(`WebSocket error: ${error}`, 'websocket');
     });
+
+    // Send initial stock data
+    storage.getActiveStocks().then(stocks => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'initial_data',
+          data: stocks
+        }));
+      }
+    }).catch(error => {
+      log(`Error sending initial data: ${error}`, 'websocket');
+    });
   });
 
   // Initialize database with some stocks if empty
@@ -263,83 +217,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const stocks = await storage.getActiveStocks();
     for (const stock of stocks) {
       if (new Date(stock.nextUpdate) <= new Date()) {
-        fetchStockData(stock.symbol).catch(console.error);
+        const updatedStock = await fetchStockData(stock.symbol);
+        if (updatedStock && clients.size > 0) {
+          const message = JSON.stringify({
+            type: 'stock_update',
+            data: updatedStock
+          });
+          for (const client of clients) {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(message);
+            }
+          }
+        }
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
     }
   }, 5 * 60 * 1000); // Every 5 minutes
 
   // API routes
-  app.get("/api/stocks/search", searchAndFilterStocks);
-
-  app.get("/api/finnhub/calendar/ipo", async (_req: any, res: any) => {
+  app.get("/api/stocks/search", async (req: any, res: any) => {
     try {
-      const data = await finnhubRequest('/calendar/ipo');
-      if (!data || !data.ipoCalendar) {
-        return res.json([]);
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 50;
+      const search = req.query.search?.toLowerCase();
+      const tradingApp = req.query.tradingApp;
+      const industry = req.query.industry;
+      const exchange = req.query.exchange;
+      const afterHoursOnly = req.query.afterHoursOnly === 'true';
+
+      log('Starting stock search...', 'search');
+
+      // Get stocks from database
+      let stocks = await storage.getActiveStocks();
+
+      // Apply filters
+      stocks = stocks.filter(stock =>
+        (!search ||
+          stock.symbol.toLowerCase().includes(search) ||
+          stock.name.toLowerCase().includes(search)
+        ) &&
+        (!industry || industry === 'Any' || stock.industry === industry) &&
+        (!exchange || exchange === 'Any' || stock.exchange === exchange) &&
+        (!tradingApp || tradingApp === 'Any' || isStockAvailableOnPlatform(stock.symbol, tradingApp)) &&
+        (!afterHoursOnly || stock.isAfterHoursTrading)
+      );
+
+      // Handle favorites filter
+      if (req.query.isFavorite === 'true') {
+        stocks = stocks.filter(stock => stock.isFavorite);
       }
 
-      res.json(data.ipoCalendar);
+      // Calculate pagination
+      const total = stocks.length;
+      const startIndex = (page - 1) * limit;
+      const endIndex = Math.min(startIndex + limit, total);
+      const paginatedStocks = stocks.slice(startIndex, endIndex);
+
+      log(`Sending ${paginatedStocks.length} stocks`, 'search');
+      res.json({
+        stocks: paginatedStocks,
+        hasMore: endIndex < total,
+        total
+      });
     } catch (error) {
-      log(`IPO calendar error: ${error}`, 'error');
-      res.status(500).json({ error: 'Failed to fetch IPO calendar' });
-    }
-  });
-
-  app.get("/api/finnhub/spacs", async (_req: any, res: any) => {
-    try {
-      const symbolsData = await finnhubRequest('/stock/symbol?exchange=US');
-      if (!symbolsData) throw new Error('Failed to fetch SPAC data');
-
-      // Filter for potential SPACs
-      const spacSymbols = symbolsData
-        .filter((stock: any) => {
-          const symbol = stock.symbol.toUpperCase();
-          const description = (stock.description || '').toUpperCase();
-          return (
-            symbol.endsWith('U') ||
-            symbol.includes('SPAC') ||
-            symbol.includes('ACQ') ||
-            description.includes('SPAC') ||
-            description.includes('ACQUISITION') ||
-            description.includes('BLANK CHECK')
-          );
-        })
-        .map((stock: any) => stock.symbol);
-
-      log(`Found ${spacSymbols.length} potential SPACs`, 'spac');
-
-      // Get SPAC data
-      const spacs = [];
-      for (const symbol of spacSymbols) {
-        const stockData = await storage.getStockBySymbol(symbol);
-        if (stockData) {
-          spacs.push({
-            ...stockData,
-            status: 'Pre-merger',
-            trustValue: Math.floor(Math.random() * 500 + 100) * 1e6,
-            targetCompany: null
-          });
-        } else {
-          const newStockData = await fetchStockData(symbol);
-          if (newStockData) {
-            spacs.push({
-              ...newStockData,
-              status: 'Pre-merger',
-              trustValue: Math.floor(Math.random() * 500 + 100) * 1e6,
-              targetCompany: null
-            });
-          }
-        }
-        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      }
-
-      res.json(spacs);
-    } catch (error) {
-      log(`SPAC list error: ${error}`, 'error');
-      res.status(500).json({ error: 'Failed to fetch SPAC list' });
+      log(`Search failed: ${error}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch stocks' });
     }
   });
 
   return httpServer;
+}
+
+function isStockAvailableOnPlatform(symbol: string, platform: string): boolean {
+  return true; // For demo purposes, assume all stocks are available on all platforms
 }

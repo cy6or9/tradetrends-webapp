@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import type { Stock } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
+import { stockCache } from "@/lib/stockCache";
 
 interface StockListProps {
   filters: {
@@ -38,7 +39,7 @@ interface StockListProps {
     industry?: string;
     exchange?: string;
     isFavorite?: boolean;
-    afterHoursOnly?: boolean; // Added to handle after-hours filter
+    afterHoursOnly?: boolean;
   };
   setStocks?: (stocks: Stock[]) => void;
 }
@@ -52,16 +53,6 @@ const LoadingSpinner = () => (
     </p>
   </div>
 );
-
-// Assume stockCache is defined elsewhere and handles caching logic.  Example implementation below:
-const stockCache = {
-  stocks: [] as Stock[],
-  getAllStocks: () => this.stocks,
-  updateStocks: (newStocks: Stock[]) => {
-    this.stocks = newStocks;
-  }
-};
-
 
 export function StockList({ filters, setStocks }: StockListProps) {
   const [sort, setSort] = useState<{
@@ -78,10 +69,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (pageParam === 1) {
       const cachedStocks = stockCache.getAllStocks();
       if (cachedStocks.length > 0) {
-        // Return cached data immediately
         return {
           stocks: cachedStocks,
-          hasMore: true,
+          hasMore: false,
           total: cachedStocks.length
         };
       }
@@ -164,7 +154,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return [...acc, ...newStocks];
   }, [] as Stock[]) ?? [];
 
-  // Filter and sort stocks
+  // Sort stocks
   const sortedStocks = [...allStocks].sort((a, b) => {
     const aVal = a[sort.key];
     const bVal = b[sort.key];
