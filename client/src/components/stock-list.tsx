@@ -124,6 +124,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (!response.ok) throw new Error('Failed to fetch stocks');
     const data = await response.json();
 
+    // Update cache with new data, including any newly found stocks
     stockCache.updateStocks(data.stocks);
 
     if (filters.isHotStock) {
@@ -192,15 +193,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }
   });
 
-  const [columnSizes, setColumnSizes] = useState({
-    symbol: 15,
-    name: 25,
-    price: 15,
-    change: 15,
-    rating: 15,
-    volume: 15,
-  });
-
   if (isError) {
     return (
       <div className="p-8 text-center text-red-500">
@@ -234,112 +226,147 @@ export function StockList({ filters, setStocks }: StockListProps) {
         </div>
       )}
       <div className="w-full">
-        <div className="flex flex-col">
-          <ResizablePanelGroup direction="horizontal" className="min-h-0">
-            <ResizablePanel defaultSize={columnSizes.symbol} minSize={10}>
-              <div className="h-10 flex items-center px-2">
-                <Button variant="ghost" onClick={() => handleSort('symbol')} className="w-full justify-between">
-                  Symbol <ArrowUpDown className="h-4 w-4" />
-                </Button>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle />
-            <ResizablePanel defaultSize={columnSizes.name} minSize={15}>
-              <div className="h-10 flex items-center px-2">
-                <Button variant="ghost" onClick={() => handleSort('name')} className="w-full justify-between">
-                  Name <ArrowUpDown className="h-4 w-4" />
-                </Button>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle />
-            <ResizablePanel defaultSize={columnSizes.price} minSize={10}>
-              <div className="h-10 flex items-center px-2">
-                <Button variant="ghost" onClick={() => handleSort('price')} className="w-full justify-between">
-                  Price <ArrowUpDown className="h-4 w-4" />
-                </Button>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle />
-            <ResizablePanel defaultSize={columnSizes.change} minSize={10}>
-              <div className="h-10 flex items-center px-2">
-                <Button variant="ghost" onClick={() => handleSort('changePercent')} className="w-full justify-between">
-                  Change % <ArrowUpDown className="h-4 w-4" />
-                </Button>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle />
-            <ResizablePanel defaultSize={columnSizes.rating} minSize={10}>
-              <div className="h-10 flex items-center px-2">
-                <Button variant="ghost" onClick={() => handleSort('analystRating')} className="w-full justify-between">
-                  Rating <ArrowUpDown className="h-4 w-4" />
-                </Button>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle />
-            <ResizablePanel defaultSize={columnSizes.volume} minSize={10}>
-              <div className="h-10 flex items-center px-2">
-                <Button variant="ghost" onClick={() => handleSort('volume')} className="w-full justify-between">
-                  Volume <ArrowUpDown className="h-4 w-4" />
-                </Button>
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-
-          <div className="flex-1 overflow-auto">
-            <Table>
-              <TableBody>
-                {sortedStocks.map((stock) => (
-                  <TableRow
-                    key={stock.symbol}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavoriteMutation.mutate(stock.id);
-                          }}
-                        >
-                          <Star
-                            className={cn(
-                              "h-4 w-4",
-                              stock.isFavorite ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
-                            )}
-                          />
-                        </Button>
-                        {stock.symbol}
-                      </div>
-                    </TableCell>
-                    <TableCell>{stock.name}</TableCell>
-                    <TableCell>${stock.price.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {stock.changePercent > 0 ? (
-                          <TrendingUp className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <TrendingDown className="w-4 h-4 text-red-500" />
+        <ResizablePanelGroup direction="horizontal">
+          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
+            <div className="h-10 flex items-center px-2 font-medium">
+              <Button variant="ghost" onClick={() => handleSort('symbol')} className="w-full justify-between">
+                Symbol <ArrowUpDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex-1">
+              {sortedStocks.map((stock) => (
+                <div key={`symbol-${stock.symbol}`} className="px-2 py-3 border-t">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavoriteMutation.mutate(stock.id);
+                      }}
+                    >
+                      <Star
+                        className={cn(
+                          "h-4 w-4",
+                          stock.isFavorite ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
                         )}
-                        <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
-                          {stock.changePercent.toFixed(2)}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
-                        {stock.analystRating}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{stock.volume.toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                      />
+                    </Button>
+                    {stock.symbol}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle />
+
+          <ResizablePanel defaultSize={30} minSize={15} className="flex flex-col">
+            <div className="h-10 flex items-center px-2 font-medium">
+              <Button variant="ghost" onClick={() => handleSort('name')} className="w-full justify-between">
+                Name <ArrowUpDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex-1">
+              {sortedStocks.map((stock) => (
+                <div key={`name-${stock.symbol}`} className="px-2 py-3 border-t">
+                  {stock.name}
+                </div>
+              ))}
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle />
+
+          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
+            <div className="h-10 flex items-center px-2 font-medium">
+              <Button variant="ghost" onClick={() => handleSort('price')} className="w-full justify-between">
+                Price <ArrowUpDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex-1">
+              {sortedStocks.map((stock) => (
+                <div key={`price-${stock.symbol}`} className="px-2 py-3 border-t">
+                  ${stock.price.toFixed(2)}
+                </div>
+              ))}
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle />
+
+          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
+            <div className="h-10 flex items-center px-2 font-medium">
+              <Button variant="ghost" onClick={() => handleSort('changePercent')} className="w-full justify-between">
+                Change % <ArrowUpDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex-1">
+              {sortedStocks.map((stock) => (
+                <div key={`change-${stock.symbol}`} className="px-2 py-3 border-t">
+                  <div className="flex items-center gap-1">
+                    {stock.changePercent > 0 ? (
+                      <TrendingUp className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <TrendingDown className="w-4 h-4 text-red-500" />
+                    )}
+                    <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
+                      {stock.changePercent.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle />
+
+          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
+            <div className="h-10 flex items-center px-2 font-medium">
+              <Button variant="ghost" onClick={() => handleSort('analystRating')} className="w-full justify-between">
+                Rating <ArrowUpDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex-1">
+              {sortedStocks.map((stock) => (
+                <div key={`rating-${stock.symbol}`} className="px-2 py-3 border-t">
+                  <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
+                    {stock.analystRating}%
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle />
+
+          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
+            <div className="h-10 flex items-center px-2 font-medium">
+              <Button variant="ghost" onClick={() => handleSort('volume')} className="w-full justify-between">
+                Volume <ArrowUpDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex-1">
+              {sortedStocks.map((stock) => (
+                <div key={`volume-${stock.symbol}`} className="px-2 py-3 border-t">
+                  {stock.volume.toLocaleString()}
+                </div>
+              ))}
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+
+        {/* Make rows clickable */}
+        <div 
+          className="absolute inset-0 pointer-events-none"
+          //onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}  Removed because it was causing errors.  Clickability handled differently.
+        >
+          {sortedStocks.map((stock) => (
+            <div key={`row-${stock.symbol}`} className="h-[52px] mt-10 hover:bg-muted/50 cursor-pointer pointer-events-auto" 
+              onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
+            />
+          ))}
         </div>
 
         {/* Loading indicator */}
