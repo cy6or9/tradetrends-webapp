@@ -69,7 +69,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
       ...(filters.search && { search: filters.search }),
       ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
       ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
-      ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange })
+      ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange }),
+      ...(filters.isFavorite && { isFavorite: 'true' })
     });
 
     const response = await fetch(`/api/stocks/search?${searchParams}`);
@@ -84,7 +85,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     isFetchingNextPage,
     isLoading,
     isError,
-    refetch
   } = useInfiniteQuery({
     queryKey: ["/api/stocks", filters],
     queryFn: fetchStocks,
@@ -95,10 +95,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     staleTime: 30000,
     initialPageParam: 1,
   });
-
-  useEffect(() => {
-    refetch();
-  }, [filters, refetch]);
 
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
     const [target] = entries;
@@ -131,26 +127,15 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }));
   };
 
-  // Flatten and filter all stocks from all pages
-  const filteredStocks = (data?.pages.flatMap(page => page.stocks) ?? [])
-    .filter((stock) => {
-      if (!stock) return false;
-      if (filters.minPrice && stock.price < filters.minPrice) return false;
-      if (filters.maxPrice && stock.price > filters.maxPrice) return false;
-      if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
-      if (filters.maxChangePercent && stock.changePercent > filters.maxChangePercent) return false;
-      if (filters.minAnalystRating && stock.analystRating < filters.minAnalystRating) return false;
-      if (filters.minVolume && stock.volume < filters.minVolume * 1_000_000) return false;
-      if (filters.maxVolume && stock.volume > filters.maxVolume * 1_000_000) return false;
-      if (filters.minMarketCap && stock.marketCap < filters.minMarketCap * 1_000_000_000) return false;
-      if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
-      if (filters.minBeta && stock.beta < filters.minBeta) return false;
-      if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
-      return true;
-    });
+  // Get unique stocks from all pages
+  const allStocks = data?.pages.reduce((acc, page) => {
+    const seenSymbols = new Set(acc.map(s => s.symbol));
+    const newStocks = page.stocks.filter(s => !seenSymbols.has(s.symbol));
+    return [...acc, ...newStocks];
+  }, [] as Stock[]) ?? [];
 
-  // Sort stocks
-  const sortedStocks = [...filteredStocks].sort((a, b) => {
+  // Filter and sort stocks
+  const sortedStocks = [...allStocks].sort((a, b) => {
     const aVal = a[sort.key];
     const bVal = b[sort.key];
     const modifier = sort.direction === 'asc' ? 1 : -1;
@@ -181,7 +166,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }
   });
 
-
   if (isError) {
     return (
       <div className="p-8 text-center text-red-500">
@@ -197,7 +181,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   if (!sortedStocks.length) {
     return (
       <div className="p-8 text-center text-muted-foreground">
-        No stocks found matching your criteria.
+        {filters.isFavorite ? "No favorite stocks yet." : "No stocks found matching your criteria."}
       </div>
     );
   }
@@ -245,6 +229,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
               <TableRow
                 key={stock.symbol}
                 className="cursor-pointer hover:bg-muted/50"
+                onClick={() => navigate(`/stock/${stock.symbol}`)}
               >
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">

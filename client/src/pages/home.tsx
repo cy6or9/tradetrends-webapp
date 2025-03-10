@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { StockList } from "@/components/stock-list";
 import { StockFilters } from "@/components/stock-filters";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,7 @@ export default function Home() {
   const [allStocksCount, setAllStocksCount] = useState(0);
   const [allStocksExpanded, setAllStocksExpanded] = useState(false);
   const [favoritesExpanded, setFavoritesExpanded] = useState(true);
-  const [stocks, setStocks] = useState<any[]>([]); //Retaining the original stocks state
+  const [favoriteStocksCount, setFavoriteStocksCount] = useState(0);
 
   // Hot stocks filter - stocks with high analyst ratings and recent movement
   const hotStocksFilter = {
@@ -44,6 +44,13 @@ export default function Home() {
     minAnalystRating: 80,
     minChangePercent: 2,
   };
+
+  // Update favorites expanded state based on count
+  useEffect(() => {
+    if (favoriteStocksCount > 3) {
+      setFavoritesExpanded(false);
+    }
+  }, [favoriteStocksCount]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -130,6 +137,9 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <Star className="h-5 w-5 fill-current" />
                 <span>Favorites</span>
+                {favoriteStocksCount > 0 && (
+                  <span className="text-sm text-muted-foreground">({favoriteStocksCount} stocks)</span>
+                )}
               </div>
               {favoritesExpanded ? (
                 <ChevronDown className="h-5 w-5" />
@@ -139,7 +149,10 @@ export default function Home() {
             </Button>
             {favoritesExpanded && (
               <div className="mt-2">
-                <StockList filters={{ isFavorite: true }} />
+                <StockList 
+                  filters={{ isFavorite: true }} 
+                  setStocks={(stocks) => setFavoriteStocksCount(stocks.length)}
+                />
               </div>
             )}
           </div>
