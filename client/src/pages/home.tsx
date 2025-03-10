@@ -33,7 +33,8 @@ export default function Home() {
   const [filters, setFilters] = useState({});
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("stocks");
-  const [stocks, setStocks] = useState<any[]>([]);
+  const [allStocksCount, setAllStocksCount] = useState(0);
+  const [stocks, setStocks] = useState<any[]>([]); //Retaining the original stocks state
 
   // Hot stocks filter - stocks with high analyst ratings and recent movement
   const hotStocksFilter = {
@@ -75,7 +76,7 @@ export default function Home() {
                   </p>
                 </div>
                 <ErrorBoundary fallback={null}>
-                  <WebSocketStatus stockCount={stocks?.length || 0} />
+                  <WebSocketStatus stockCount={allStocksCount} />
                 </ErrorBoundary>
               </div>
             </CardHeader>
@@ -109,7 +110,7 @@ export default function Home() {
                       <p className="text-sm text-cyan-500 mb-2">
                         Trending stocks with high analyst ratings (80%+) and significant price movement today
                       </p>
-                      <StockList filters={hotStocksFilter} setStocks={setStocks} />
+                      <StockList filters={hotStocksFilter} />
                     </div>
                   </TabsContent>
                 </div>
@@ -120,7 +121,7 @@ export default function Home() {
           {/* Main stock list - all traceable stocks */}
           <div className="mt-2">
             <h2 className="text-xl font-semibold text-cyan-500 mb-2">All Stocks</h2>
-            <StockList filters={filters} setStocks={setStocks} />
+            <StockList filters={filters} setStocks={(stocks) => setAllStocksCount(stocks.length)} />
           </div>
         </div>
       </div>
