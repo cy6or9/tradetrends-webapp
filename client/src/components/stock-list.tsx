@@ -92,7 +92,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
       if (cachedStocks.length > 0) {
         if (filters.isHotStock) {
           const hotStocks = cachedStocks.filter(stock =>
-            stock.analystRating >= 80 &&
+            stock.analystRating >= 90 &&
             Math.abs(stock.changePercent) >= 2
           );
           return {
@@ -128,7 +128,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
     if (filters.isHotStock) {
       data.stocks = data.stocks.filter(stock =>
-        stock.analystRating >= 80 &&
+        stock.analystRating >= 90 &&
         Math.abs(stock.changePercent) >= 2
       );
       data.total = data.stocks.length;

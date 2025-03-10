@@ -42,7 +42,7 @@ export default function Home() {
   const hotStocksFilter = {
     ...filters,
     isHotStock: true,
-    minAnalystRating: 80,
+    minAnalystRating: 90,
     minChangePercent: 2,
   };
 
@@ -118,7 +118,7 @@ export default function Home() {
                   <TabsContent value="stocks" className="m-0">
                     <div className="mt-2">
                       <p className="text-sm text-cyan-500 mb-2">
-                        Trending stocks with high analyst ratings (80%+) and significant price movement today
+                        Trending stocks with high analyst ratings (90%+) and significant price movement today
                       </p>
                       <StockList filters={hotStocksFilter} />
                     </div>
