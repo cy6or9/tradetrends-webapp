@@ -6,6 +6,8 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
+  TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -15,11 +17,6 @@ import type { Stock } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { stockCache } from "@/lib/stockCache";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
 
 interface StockListProps {
   filters: {
@@ -34,7 +31,6 @@ interface StockListProps {
     maxMarketCap?: number;
     minBeta?: number;
     maxBeta?: number;
-    industries?: string[];
     sortBy?: string;
     sortDir?: "asc" | "desc";
     search?: string;
@@ -90,6 +86,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (pageParam === 1) {
       const cachedStocks = stockCache.getAllStocks();
       if (cachedStocks.length > 0) {
+        // Only apply hot stocks filter for hot stocks section
         if (filters.isHotStock) {
           const hotStocks = cachedStocks.filter(stock =>
             stock.analystRating >= 90 &&
@@ -101,6 +98,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
             total: hotStocks.length
           };
         }
+        // For non-hot stocks sections, return all cached stocks
         return {
           stocks: cachedStocks,
           hasMore: false,
@@ -112,7 +110,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
-      ...(filters.search && { search: filters.search }),
       ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
       ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
       ...(filters.exchange && filters.exchange !== 'Any' && { exchange: filters.exchange }),
@@ -120,11 +117,16 @@ export function StockList({ filters, setStocks }: StockListProps) {
       ...(filters.afterHoursOnly && { afterHoursOnly: 'true' })
     });
 
+    // Only add search parameter for All Stocks section
+    if (!filters.isHotStock && !filters.isFavorite && filters.search) {
+      searchParams.append('search', filters.search);
+    }
+
     const response = await fetch(`/api/stocks/search?${searchParams}`);
     if (!response.ok) throw new Error('Failed to fetch stocks');
     const data = await response.json();
 
-    // Update cache with new data, including any newly found stocks
+    // Update cache with new stocks, including newly found ones
     stockCache.updateStocks(data.stocks);
 
     if (filters.isHotStock) {
@@ -225,17 +227,50 @@ export function StockList({ filters, setStocks }: StockListProps) {
           </div>
         </div>
       )}
-      <div className="w-full">
-        <ResizablePanelGroup direction="horizontal">
-          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
-            <div className="h-10 flex items-center px-2 font-medium">
-              <Button variant="ghost" onClick={() => handleSort('symbol')} className="w-full justify-between">
-                Symbol <ArrowUpDown className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex-1">
-              {sortedStocks.map((stock) => (
-                <div key={`symbol-${stock.symbol}`} className="px-2 py-3 border-t">
+      <div className="w-full overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium">
+                  Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium">
+                  Name <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium">
+                  Price <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium">
+                  Change % <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium">
+                  Rating <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium">
+                  Volume <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedStocks.map((stock) => (
+              <TableRow
+                key={stock.symbol}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
+              >
+                <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
                     <Button
                       variant="ghost"
@@ -255,56 +290,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
                     </Button>
                     {stock.symbol}
                   </div>
-                </div>
-              ))}
-            </div>
-          </ResizablePanel>
-
-          <ResizableHandle />
-
-          <ResizablePanel defaultSize={30} minSize={15} className="flex flex-col">
-            <div className="h-10 flex items-center px-2 font-medium">
-              <Button variant="ghost" onClick={() => handleSort('name')} className="w-full justify-between">
-                Name <ArrowUpDown className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex-1">
-              {sortedStocks.map((stock) => (
-                <div key={`name-${stock.symbol}`} className="px-2 py-3 border-t">
-                  {stock.name}
-                </div>
-              ))}
-            </div>
-          </ResizablePanel>
-
-          <ResizableHandle />
-
-          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
-            <div className="h-10 flex items-center px-2 font-medium">
-              <Button variant="ghost" onClick={() => handleSort('price')} className="w-full justify-between">
-                Price <ArrowUpDown className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex-1">
-              {sortedStocks.map((stock) => (
-                <div key={`price-${stock.symbol}`} className="px-2 py-3 border-t">
-                  ${stock.price.toFixed(2)}
-                </div>
-              ))}
-            </div>
-          </ResizablePanel>
-
-          <ResizableHandle />
-
-          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
-            <div className="h-10 flex items-center px-2 font-medium">
-              <Button variant="ghost" onClick={() => handleSort('changePercent')} className="w-full justify-between">
-                Change % <ArrowUpDown className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex-1">
-              {sortedStocks.map((stock) => (
-                <div key={`change-${stock.symbol}`} className="px-2 py-3 border-t">
+                </TableCell>
+                <TableCell>{stock.name}</TableCell>
+                <TableCell>${stock.price.toFixed(2)}</TableCell>
+                <TableCell>
                   <div className="flex items-center gap-1">
                     {stock.changePercent > 0 ? (
                       <TrendingUp className="w-4 h-4 text-green-500" />
@@ -315,59 +304,17 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       {stock.changePercent.toFixed(2)}%
                     </span>
                   </div>
-                </div>
-              ))}
-            </div>
-          </ResizablePanel>
-
-          <ResizableHandle />
-
-          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
-            <div className="h-10 flex items-center px-2 font-medium">
-              <Button variant="ghost" onClick={() => handleSort('analystRating')} className="w-full justify-between">
-                Rating <ArrowUpDown className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex-1">
-              {sortedStocks.map((stock) => (
-                <div key={`rating-${stock.symbol}`} className="px-2 py-3 border-t">
+                </TableCell>
+                <TableCell>
                   <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
                     {stock.analystRating}%
                   </Badge>
-                </div>
-              ))}
-            </div>
-          </ResizablePanel>
-
-          <ResizableHandle />
-
-          <ResizablePanel defaultSize={15} minSize={10} className="flex flex-col">
-            <div className="h-10 flex items-center px-2 font-medium">
-              <Button variant="ghost" onClick={() => handleSort('volume')} className="w-full justify-between">
-                Volume <ArrowUpDown className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex-1">
-              {sortedStocks.map((stock) => (
-                <div key={`volume-${stock.symbol}`} className="px-2 py-3 border-t">
-                  {stock.volume.toLocaleString()}
-                </div>
-              ))}
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-
-        {/* Make rows clickable */}
-        <div 
-          className="absolute inset-0 pointer-events-none"
-          //onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}  Removed because it was causing errors.  Clickability handled differently.
-        >
-          {sortedStocks.map((stock) => (
-            <div key={`row-${stock.symbol}`} className="h-[52px] mt-10 hover:bg-muted/50 cursor-pointer pointer-events-auto" 
-              onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
-            />
-          ))}
-        </div>
+                </TableCell>
+                <TableCell>{stock.volume.toLocaleString()}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
 
         {/* Loading indicator */}
         <div ref={loadMoreRef} className="py-4 text-center">
