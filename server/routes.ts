@@ -9,10 +9,9 @@ if (!process.env.FINNHUB_API_KEY) {
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const RATE_LIMIT_DELAY = 200; // 0.2 second between requests
+const RATE_LIMIT_DELAY = 250; // 0.25 second between requests
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const BATCH_SIZE = 5; // Process 5 stocks at a time
-const PAGE_SIZE = 50; // Number of stocks per page
 
 // In-memory cache with both stock data and analyst ratings
 const stockCache = new Map<string, { 
@@ -30,6 +29,33 @@ function generateAnalystRating(): number {
   return Math.floor(Math.random() * 20) + 80; // Generate rating between 80-99
 }
 
+async function finnhubRequest(endpoint: string): Promise<any> {
+  const url = `${FINNHUB_API_URL}${endpoint}`;
+  const headers = {
+    'X-Finnhub-Token': FINNHUB_API_KEY,
+    'X-Finnhub-Secret': 'cuvuc2hr01qub8tvmkt0'
+  };
+
+  try {
+    const response = await fetch(url, { headers });
+
+    if (response.status === 429) {
+      log('Rate limit hit, waiting...', 'api');
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 5));
+      return null;
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    log(`API request failed for ${endpoint}: ${error}`, 'error');
+    return null;
+  }
+}
+
 async function fetchStockData(symbol: string): Promise<any> {
   try {
     // Check cache first
@@ -41,22 +67,10 @@ async function fetchStockData(symbol: string): Promise<any> {
 
     await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
 
-    const [quoteResponse, profileResponse] = await Promise.all([
-      fetch(`${FINNHUB_API_URL}/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
-      fetch(`${FINNHUB_API_URL}/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`)
+    const [quote, profile] = await Promise.all([
+      finnhubRequest(`/quote?symbol=${symbol}`),
+      finnhubRequest(`/stock/profile2?symbol=${symbol}`)
     ]);
-
-    if (!quoteResponse.ok || !profileResponse.ok) {
-      if (quoteResponse.status === 429 || profileResponse.status === 429) {
-        log(`Rate limit hit for ${symbol}, waiting longer...`, 'api');
-        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 5));
-        return null;
-      }
-      throw new Error(`Failed to fetch data for ${symbol}`);
-    }
-
-    const quote = await quoteResponse.json();
-    const profile = await profileResponse.json();
 
     if (!quote || !profile) {
       return null;
@@ -107,12 +121,13 @@ async function searchAndFilterStocks(req: any, res: any) {
 
     log('Starting stock search...', 'search');
 
-    // Get stock symbols (with basic filtering)
-    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
-    if (!response.ok) throw new Error('Failed to fetch stock symbols');
-    const data = await response.json();
+    // Get stock symbols
+    const symbolsData = await finnhubRequest('/stock/symbol?exchange=US');
+    if (!symbolsData) {
+      throw new Error('Failed to fetch stock symbols');
+    }
 
-    const symbols = data
+    const symbols = symbolsData
       .filter((stock: any) => stock.type === 'Common Stock')
       .map((stock: any) => stock.symbol);
 
@@ -124,8 +139,8 @@ async function searchAndFilterStocks(req: any, res: any) {
     );
 
     // Calculate pagination
-    const startIndex = (page - 1) * PAGE_SIZE;
-    const endIndex = Math.min(startIndex + PAGE_SIZE, filteredSymbols.length);
+    const startIndex = (page - 1) * 50;
+    const endIndex = Math.min(startIndex + 50, filteredSymbols.length);
     const paginatedSymbols = filteredSymbols.slice(startIndex, endIndex);
 
     log(`Processing ${paginatedSymbols.length} symbols for page ${page}`, 'search');
@@ -141,7 +156,6 @@ async function searchAndFilterStocks(req: any, res: any) {
       log(`Batch ${Math.floor(i/BATCH_SIZE) + 1}: got ${validResults.length} valid results`, 'batch');
       stocks.push(...validResults);
 
-      // Add delay between batches
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
     }
 
@@ -176,12 +190,13 @@ async function searchAndFilterStocks(req: any, res: any) {
 
 async function fetchSpacList(): Promise<any[]> {
   try {
-    const response = await fetch(`${FINNHUB_API_URL}/stock/symbol?exchange=US&token=${FINNHUB_API_KEY}`);
-    if (!response.ok) throw new Error('Failed to fetch SPAC data');
-    const data = await response.json();
+    const symbolsData = await finnhubRequest('/stock/symbol?exchange=US');
+    if (!symbolsData) {
+      throw new Error('Failed to fetch SPAC data');
+    }
 
-    // Filter for potential SPACs with more lenient criteria
-    const spacSymbols = data
+    // Filter for potential SPACs
+    const spacSymbols = symbolsData
       .filter((stock: any) => {
         const symbol = stock.symbol.toUpperCase();
         const description = (stock.description || '').toUpperCase();
@@ -192,7 +207,7 @@ async function fetchSpacList(): Promise<any[]> {
           description.includes('SPAC') ||
           description.includes('ACQUISITION') ||
           description.includes('BLANK CHECK') ||
-          symbol.match(/[A-Z]{4}U$/) // Common SPAC pattern
+          symbol.match(/[A-Z]{4}U$/)
         );
       })
       .map((stock: any) => stock.symbol);
@@ -250,9 +265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/finnhub/calendar/ipo", async (_req: any, res: any) => {
     try {
-      const response = await fetch(`${FINNHUB_API_URL}/calendar/ipo?token=${FINNHUB_API_KEY}`);
-      const data = await response.json();
-
+      const data = await finnhubRequest('/calendar/ipo');
       if (!data || !data.ipoCalendar) {
         return res.json([]);
       }
