@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -13,9 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Star, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Stock } from "@shared/schema";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
 import { stockCache } from "@/lib/stockCache";
 
 interface StockListProps {
@@ -41,7 +38,7 @@ interface StockListProps {
     afterHoursOnly?: boolean;
     isHotStock?: boolean;
   };
-  setStocks?: (stocks: Stock[]) => void;
+  setStocks?: (stocks: any[]) => void;
 }
 
 const LoadingSpinner = () => (
@@ -56,16 +53,12 @@ const LoadingSpinner = () => (
 
 export function StockList({ filters, setStocks }: StockListProps) {
   const [sort, setSort] = useState<{
-    key: keyof Stock;
+    key: string;
     direction: 'asc' | 'desc';
   }>({ key: 'analystRating', direction: 'desc' });
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-  const [, navigate] = useLocation();
-  const queryClient = useQueryClient();
   const [isTabActive, setIsTabActive] = useState(true);
 
-  const handleSort = useCallback((key: keyof Stock) => {
+  const handleSort = useCallback((key: string) => {
     setSort(current => ({
       key,
       direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
@@ -108,7 +101,18 @@ export function StockList({ filters, setStocks }: StockListProps) {
       };
     }
 
-    // All Stocks section - handle search and filters
+    // Favorites section - cache only
+    if (filters.isFavorite) {
+      const cachedStocks = stockCache.getAllStocks();
+      const favoriteStocks = cachedStocks.filter(stock => stock.isFavorite);
+      return {
+        stocks: favoriteStocks,
+        hasMore: false,
+        total: favoriteStocks.length
+      };
+    }
+
+    // All Stocks section - search and filters
     const searchParams = new URLSearchParams({
       page: pageParam.toString(),
       limit: '50',
@@ -172,7 +176,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     const seenSymbols = new Set(acc.map(s => s.symbol));
     const newStocks = page.stocks.filter(s => !seenSymbols.has(s.symbol));
     return [...acc, ...newStocks];
-  }, [] as Stock[]) ?? [];
+  }, [] as any[]) ?? [];
 
   const sortedStocks = [...allStocks].sort((a, b) => {
     const aVal = a[sort.key];
@@ -191,17 +195,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
   useEffect(() => {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
-
-  const toggleFavoriteMutation = useMutation({
-    mutationFn: async (stockId: number) => {
-      return apiRequest(`/api/stocks/${stockId}/favorite`, {
-        method: 'POST'
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/stocks'] });
-    }
-  });
 
   if (isError) {
     return (
@@ -233,11 +226,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
         </div>
       )}
       <div className="w-full overflow-x-auto">
-        <div className="min-w-[580px] max-w-full">
+        <div className="min-w-[550px] max-w-full">
           <Table>
-            <TableHeader className="sticky top-0 bg-background z-10">
+            <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
               <TableRow>
-                <TableHead className="sticky left-0 bg-background/95 backdrop-blur-sm min-w-[100px] z-20">
+                <TableHead className="sticky left-0 bg-background/95 backdrop-blur-sm min-w-[90px] z-20">
                   <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
                     Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
@@ -254,17 +247,17 @@ export function StockList({ filters, setStocks }: StockListProps) {
                 </TableHead>
                 <TableHead className="min-w-[90px]">
                   <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full justify-between">
-                    Change % <ArrowUpDown className="ml-2 h-4 w-4" />
+                    Change <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead className="min-w-[60px]">
+                  <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium w-full justify-between">
+                    Rate <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
                 <TableHead className="min-w-[70px]">
-                  <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium w-full justify-between">
-                    Rating <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead className="min-w-[80px]">
                   <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
-                    Volume <ArrowUpDown className="ml-2 h-4 w-4" />
+                    Vol <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
               </TableRow>
@@ -276,7 +269,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                 >
-                  <TableCell className="sticky left-0 bg-background/95 backdrop-blur-sm font-medium min-w-[100px] z-10">
+                  <TableCell className="sticky left-0 bg-background/95 backdrop-blur-sm font-medium min-w-[90px] z-10">
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
@@ -284,7 +277,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         className="h-8 w-8 p-0"
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleFavoriteMutation.mutate(stock.id);
+                          stockCache.toggleFavorite(stock.symbol);
+                          // Force a re-render
+                          setStocks?.([...sortedStocks]);
                         }}
                       >
                         <Star
@@ -311,12 +306,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="min-w-[70px]">
+                  <TableCell className="min-w-[60px]">
                     <Badge variant={stock.analystRating >= 95 ? "default" : "secondary"}>
                       {stock.analystRating}%
                     </Badge>
                   </TableCell>
-                  <TableCell className="min-w-[80px]">{stock.volume.toLocaleString()}</TableCell>
+                  <TableCell className="min-w-[70px]">{stock.volume.toLocaleString()}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
