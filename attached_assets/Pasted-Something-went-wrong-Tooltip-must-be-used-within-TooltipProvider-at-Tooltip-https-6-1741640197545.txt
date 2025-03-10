@@ -1,0 +1,43 @@
+Something went wrong
+`Tooltip` must be used within `TooltipProvider`
+
+
+    at Tooltip (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=cc82ea1d:98:5)
+    at div
+    at th
+    at _c11 (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/src/components/ui/table.tsx:127:13)
+    at tr
+    at _c9 (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/src/components/ui/table.tsx:102:12)
+    at thead
+    at _c3 (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/src/components/ui/table.tsx:46:12)
+    at table
+    at div
+    at _c (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/src/components/ui/table.tsx:20:11)
+    at div
+    at div
+    at div
+    at _c (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/src/components/ui/card.tsx:20:11)
+    at StockList (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/src/components/stock-list.tsx:185:29)
+    at div
+    at div
+    at https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-47EXKAQW.js?v=e6bbe376:41:13
+    at Presence (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KISGBWJB.js?v=e6bbe376:24:11)
+    at https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=20798ea4:383:13
+    at _c5 (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at div
+    at div
+    at https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-47EXKAQW.js?v=e6bbe376:41:13
+    at Provider (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBRMZKET.js?v=e6bbe376:32:15)
+    at https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=20798ea4:261:7
+    at div
+    at div
+    at div
+    at div
+    at Home (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/src/pages/home.tsx:61:33)
+    at Route (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2b2e2239:280:16)
+    at Switch (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2b2e2239:336:17)
+    at div
+    at ErrorBoundary (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/src/components/ErrorBoundary.tsx:7:5)
+    at App
+    at QueryClientProvider (https://6fd20306-21bc-428a-b39a-295e88d8b8e0-00-2b87xh1yy8hb0.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=835fb88f:2848:3)
