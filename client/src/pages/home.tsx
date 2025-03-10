@@ -41,6 +41,7 @@ export default function Home() {
   // Hot stocks filter - stocks with high analyst ratings and recent movement
   const hotStocksFilter = {
     ...filters,
+    isHotStock: true,
     minAnalystRating: 80,
     minChangePercent: 2,
   };
@@ -149,8 +150,8 @@ export default function Home() {
             </Button>
             {favoritesExpanded && (
               <div className="mt-2">
-                <StockList 
-                  filters={{ isFavorite: true }} 
+                <StockList
+                  filters={{ isFavorite: true }}
                   setStocks={(stocks) => setFavoriteStocksCount(stocks.length)}
                 />
               </div>
@@ -182,6 +183,7 @@ export default function Home() {
           </div>
         </div>
       </div>
+      {/* Add loading overlay here for inactive tabs */}
     </div>
   );
 }

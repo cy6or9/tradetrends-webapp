@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Star, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
+import { Star, TrendingUp, TrendingDown, ArrowUpDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Stock } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,7 @@ interface StockListProps {
     exchange?: string;
     isFavorite?: boolean;
     afterHoursOnly?: boolean;
+    isHotStock?: boolean;
   };
   setStocks?: (stocks: Stock[]) => void;
 }
@@ -63,12 +64,36 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const [isTabActive, setIsTabActive] = useState(true);
+
+  useEffect(() => {
+    // Handle tab visibility changes
+    const handleVisibilityChange = () => {
+      setIsTabActive(!document.hidden);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const fetchStocks = async ({ pageParam = 1 }) => {
     // Check cache first
     if (pageParam === 1) {
       const cachedStocks = stockCache.getAllStocks();
       if (cachedStocks.length > 0) {
+        // Apply hot stocks filter if needed
+        if (filters.isHotStock) {
+          const hotStocks = cachedStocks.filter(stock => 
+            stock.analystRating >= 80 && 
+            Math.abs(stock.changePercent) >= 2
+          );
+          return {
+            stocks: hotStocks,
+            hasMore: false,
+            total: hotStocks.length
+          };
+        }
         return {
           stocks: cachedStocks,
           hasMore: false,
@@ -95,6 +120,16 @@ export function StockList({ filters, setStocks }: StockListProps) {
     // Update cache with new data
     stockCache.updateStocks(data.stocks);
 
+    // Apply hot stocks filter if needed
+    if (filters.isHotStock) {
+      data.stocks = data.stocks.filter(stock => 
+        stock.analystRating >= 80 && 
+        Math.abs(stock.changePercent) >= 2
+      );
+      data.total = data.stocks.length;
+      data.hasMore = false;
+    }
+
     return data;
   };
 
@@ -115,37 +150,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     staleTime: 30000,
     initialPageParam: 1,
   });
-
-  const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
-    const [target] = entries;
-    if (target.isIntersecting && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
-
-  useEffect(() => {
-    const element = loadMoreRef.current;
-    if (!element) return;
-
-    observerRef.current = new IntersectionObserver(handleObserver, {
-      threshold: 0.1,
-    });
-
-    observerRef.current.observe(element);
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, [handleObserver]);
-
-  const handleSort = (key: keyof Stock) => {
-    setSort(current => ({
-      key,
-      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
 
   // Get unique stocks from all pages
   const allStocks = data?.pages.reduce((acc, page) => {
@@ -201,13 +205,23 @@ export function StockList({ filters, setStocks }: StockListProps) {
   if (!sortedStocks.length) {
     return (
       <div className="p-8 text-center text-muted-foreground">
-        {filters.isFavorite ? "No favorite stocks yet." : "No stocks found matching your criteria."}
+        {filters.isFavorite ? "No favorite stocks yet." : 
+         filters.isHotStock ? "No hot stocks matching criteria." :
+         "No stocks found matching your criteria."}
       </div>
     );
   }
 
   return (
-    <Card>
+    <Card className="relative">
+      {!isTabActive && (
+        <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
+          </div>
+        </div>
+      )}
       <div className="w-full overflow-auto">
         <Table>
           <TableHeader>
@@ -249,7 +263,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
               <TableRow
                 key={stock.symbol}
                 className="cursor-pointer hover:bg-muted/50"
-                onClick={() => navigate(`/stock/${stock.symbol}`)}
+                onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
               >
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
