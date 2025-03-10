@@ -9,9 +9,9 @@ if (!process.env.FINNHUB_API_KEY) {
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_API_URL = 'https://finnhub.io/api/v1';
-const RATE_LIMIT_DELAY = 250; // 0.25 second between requests
+const RATE_LIMIT_DELAY = 500; // 0.5 second between requests
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const BATCH_SIZE = 5; // Process 5 stocks at a time
+const MAX_RETRIES = 3;
 
 // In-memory cache with both stock data and analyst ratings
 const stockCache = new Map<string, { 
@@ -29,29 +29,38 @@ function generateAnalystRating(): number {
   return Math.floor(Math.random() * 20) + 80; // Generate rating between 80-99
 }
 
-async function finnhubRequest(endpoint: string): Promise<any> {
+async function finnhubRequest(endpoint: string, retryCount = 0): Promise<any> {
   const url = `${FINNHUB_API_URL}${endpoint}`;
   const headers = {
-    'X-Finnhub-Token': FINNHUB_API_KEY,
-    'X-Finnhub-Secret': 'cuvuc2hr01qub8tvmkt0'
+    'X-Finnhub-Token': FINNHUB_API_KEY
   };
 
   try {
+    log(`Making request to ${endpoint}`, 'api');
     const response = await fetch(url, { headers });
 
     if (response.status === 429) {
       log('Rate limit hit, waiting...', 'api');
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 5));
-      return null;
+      if (retryCount < MAX_RETRIES) {
+        return finnhubRequest(endpoint, retryCount + 1);
+      }
+      throw new Error('Rate limit exceeded after retries');
     }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    return data;
   } catch (error) {
     log(`API request failed for ${endpoint}: ${error}`, 'error');
+    if (retryCount < MAX_RETRIES) {
+      log(`Retrying request (${retryCount + 1}/${MAX_RETRIES})`, 'api');
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      return finnhubRequest(endpoint, retryCount + 1);
+    }
     return null;
   }
 }
@@ -65,14 +74,17 @@ async function fetchStockData(symbol: string): Promise<any> {
       return cached.data;
     }
 
+    // Add delay before API call
     await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
 
+    // Make API requests with retries
     const [quote, profile] = await Promise.all([
       finnhubRequest(`/quote?symbol=${symbol}`),
       finnhubRequest(`/stock/profile2?symbol=${symbol}`)
     ]);
 
     if (!quote || !profile) {
+      log(`Missing data for ${symbol}`, 'error');
       return null;
     }
 
@@ -85,7 +97,7 @@ async function fetchStockData(symbol: string): Promise<any> {
       price: quote.c || 0,
       change: quote.d || 0,
       changePercent: quote.dp || 0,
-      volume: quote.v || 0,
+      volume: Math.max(quote.v || 0, 0),
       marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : 0,
       beta: profile.beta || 0,
       exchange: profile.exchange || 'Unknown',
@@ -114,6 +126,7 @@ async function fetchStockData(symbol: string): Promise<any> {
 async function searchAndFilterStocks(req: any, res: any) {
   try {
     const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
     const search = req.query.search?.toLowerCase();
     const tradingApp = req.query.tradingApp;
     const industry = req.query.industry;
@@ -139,23 +152,19 @@ async function searchAndFilterStocks(req: any, res: any) {
     );
 
     // Calculate pagination
-    const startIndex = (page - 1) * 50;
-    const endIndex = Math.min(startIndex + 50, filteredSymbols.length);
+    const startIndex = (page - 1) * limit;
+    const endIndex = Math.min(startIndex + limit, filteredSymbols.length);
     const paginatedSymbols = filteredSymbols.slice(startIndex, endIndex);
 
     log(`Processing ${paginatedSymbols.length} symbols for page ${page}`, 'search');
 
-    // Process stocks in batches
+    // Process stocks sequentially to avoid rate limits
     const stocks = [];
-    for (let i = 0; i < paginatedSymbols.length; i += BATCH_SIZE) {
-      const batch = paginatedSymbols.slice(i, i + BATCH_SIZE);
-      const batchPromises = batch.map(symbol => fetchStockData(symbol));
-      const batchResults = await Promise.all(batchPromises);
-
-      const validResults = batchResults.filter(Boolean);
-      log(`Batch ${Math.floor(i/BATCH_SIZE) + 1}: got ${validResults.length} valid results`, 'batch');
-      stocks.push(...validResults);
-
+    for (const symbol of paginatedSymbols) {
+      const stockData = await fetchStockData(symbol);
+      if (stockData && stockData.price > 0) {
+        stocks.push(stockData);
+      }
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
     }
 
