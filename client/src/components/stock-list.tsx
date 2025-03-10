@@ -86,10 +86,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
     // Hot Stocks section - completely independent
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
+      // Get both types of hot stocks:
+      // 1. High rating (95%+) with significant movement
+      // 2. Very high rating (99%+) regardless of movement
       const hotStocks = cachedStocks.filter(stock =>
-        stock.analystRating >= 90 &&
-        Math.abs(stock.changePercent) >= 2
-      ).sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+        (stock.analystRating >= 95 && Math.abs(stock.changePercent) >= 2) || // Type 1
+        stock.analystRating >= 99 // Type 2
+      ).sort((a, b) => b.analystRating - a.analystRating); // Sort by rating first
 
       return {
         stocks: hotStocks,
@@ -234,36 +237,36 @@ export function StockList({ filters, setStocks }: StockListProps) {
         </div>
       )}
       <div className="w-full overflow-x-auto">
-        <div className="min-w-[800px]">
+        <div className="min-w-[600px] max-w-full">
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
-                <TableHead className="sticky left-0 bg-background min-w-[200px] z-20">
+                <TableHead className="sticky left-0 bg-background min-w-[120px] z-20">
                   <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
                     Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
-                <TableHead className="min-w-[250px]">
+                <TableHead className="min-w-[180px]">
                   <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
                     Name <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
-                <TableHead className="min-w-[100px]">
+                <TableHead className="min-w-[80px]">
                   <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full justify-between">
                     Price <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
-                <TableHead className="min-w-[120px]">
+                <TableHead className="min-w-[100px]">
                   <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full justify-between">
                     Change % <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
-                <TableHead className="min-w-[100px]">
+                <TableHead className="min-w-[80px]">
                   <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium w-full justify-between">
                     Rating <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
-                <TableHead className="min-w-[120px]">
+                <TableHead className="min-w-[100px]">
                   <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
                     Volume <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
@@ -277,7 +280,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                 >
-                  <TableCell className="sticky left-0 bg-background font-medium min-w-[200px] z-10">
+                  <TableCell className="sticky left-0 bg-background font-medium min-w-[120px] z-10">
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
@@ -298,9 +301,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       {stock.symbol}
                     </div>
                   </TableCell>
-                  <TableCell className="min-w-[250px]">{stock.name}</TableCell>
-                  <TableCell className="min-w-[100px]">${stock.price.toFixed(2)}</TableCell>
-                  <TableCell className="min-w-[120px]">
+                  <TableCell className="min-w-[180px]">{stock.name}</TableCell>
+                  <TableCell className="min-w-[80px]">${stock.price.toFixed(2)}</TableCell>
+                  <TableCell className="min-w-[100px]">
                     <div className="flex items-center gap-1">
                       {stock.changePercent > 0 ? (
                         <TrendingUp className="w-4 h-4 text-green-500" />
@@ -312,12 +315,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="min-w-[100px]">
+                  <TableCell className="min-w-[80px]">
                     <Badge variant={stock.analystRating >= 90 ? "default" : "secondary"}>
                       {stock.analystRating}%
                     </Badge>
                   </TableCell>
-                  <TableCell className="min-w-[120px]">{stock.volume.toLocaleString()}</TableCell>
+                  <TableCell className="min-w-[100px]">{stock.volume.toLocaleString()}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

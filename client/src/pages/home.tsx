@@ -124,7 +124,7 @@ export default function Home() {
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="ipo" className="text-cyan-500">IPO Calendar</TabsTrigger>
                 <TabsTrigger value="spacs" className="text-cyan-500">SPACs</TabsTrigger>
-                <TabsTrigger value="stocks" className="text-cyan-500">Market Activity</TabsTrigger>
+                <TabsTrigger value="stocks" className="text-cyan-500">Hot Stocks</TabsTrigger>
               </TabsList>
 
               <div className="h-[min(400px,50vh)] overflow-hidden">
@@ -144,7 +144,7 @@ export default function Home() {
                   <TabsContent value="stocks" className="m-0">
                     <div className="mt-2">
                       <p className="text-sm text-cyan-500 mb-2">
-                        Trending stocks with high analyst ratings (90%+) and significant price movement today
+                        Trending stocks with high analyst ratings (95%+) and significant price movement today, or exceptional ratings (99%+)
                       </p>
                       <StockList filters={hotStocksFilter} />
                     </div>
