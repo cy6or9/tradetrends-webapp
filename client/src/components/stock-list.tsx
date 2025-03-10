@@ -55,10 +55,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const [, navigate] = useLocation();
 
   const fetchStocks = async ({ pageParam = 1 }) => {
+    console.log('Fetching page:', pageParam);
     try {
       const searchParams = new URLSearchParams({
         page: pageParam.toString(),
-        limit: '50',
         ...(filters.search && { search: filters.search }),
         ...(filters.tradingApp && filters.tradingApp !== 'Any' && { tradingApp: filters.tradingApp }),
         ...(filters.industry && filters.industry !== 'Any' && { industry: filters.industry }),
@@ -66,10 +66,16 @@ export function StockList({ filters, setStocks }: StockListProps) {
       });
 
       const response = await fetch(`/api/stocks/search?${searchParams}`);
-      if (!response.ok) throw new Error('Failed to fetch stocks');
-      const data = await response.json();
+      if (!response.ok) {
+        console.error('API Error:', response.status, response.statusText);
+        throw new Error('Failed to fetch stocks');
+      }
 
-      if (!data.stocks || !Array.isArray(data.stocks)) {
+      const data = await response.json();
+      console.log('Received data:', data);
+
+      if (!data || !data.stocks || !Array.isArray(data.stocks)) {
+        console.error('Invalid data format:', data);
         throw new Error('Invalid response format');
       }
 
@@ -102,12 +108,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
   });
 
   useEffect(() => {
+    console.log('Filters changed, refetching...');
     refetch();
   }, [filters, refetch]);
 
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
     const [target] = entries;
     if (target.isIntersecting && hasNextPage && !isFetchingNextPage) {
+      console.log('Loading next page...');
       fetchNextPage();
     }
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
@@ -121,10 +129,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     });
 
     observer.observe(element);
-
-    return () => {
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, [handleObserver]);
 
   const handleSort = (key: keyof Stock) => {
@@ -134,23 +139,45 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }));
   };
 
-  // Flatten and filter all stocks from all pages
-  const filteredStocks = (data?.pages.flatMap(page => page.stocks) ?? [])
-    .filter((stock) => {
-      if (!stock) return false;
-      if (filters.minPrice && stock.price < filters.minPrice) return false;
-      if (filters.maxPrice && stock.price > filters.maxPrice) return false;
-      if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
-      if (filters.maxChangePercent && stock.changePercent > filters.maxChangePercent) return false;
-      if (filters.minAnalystRating && stock.analystRating < filters.minAnalystRating) return false;
-      if (filters.minVolume && stock.volume < filters.minVolume * 1_000_000) return false;
-      if (filters.maxVolume && stock.volume > filters.maxVolume * 1_000_000) return false;
-      if (filters.minMarketCap && stock.marketCap < filters.minMarketCap * 1_000_000_000) return false;
-      if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
-      if (filters.minBeta && stock.beta < filters.minBeta) return false;
-      if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
-      return true;
-    });
+  if (isError) {
+    console.error('Stock list error:', error);
+    return (
+      <div className="p-8 text-center text-red-500">
+        <p>Error loading stocks.</p>
+        <Button 
+          variant="outline" 
+          className="mt-4"
+          onClick={() => refetch()}
+        >
+          Try Again
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
+  // Flatten all stocks from all pages
+  const allStocks = data?.pages.flatMap(page => page.stocks) || [];
+
+  // Apply client-side filters
+  const filteredStocks = allStocks.filter((stock) => {
+    if (!stock) return false;
+    if (filters.minPrice && stock.price < filters.minPrice) return false;
+    if (filters.maxPrice && stock.price > filters.maxPrice) return false;
+    if (filters.minChangePercent && stock.changePercent < filters.minChangePercent) return false;
+    if (filters.maxChangePercent && stock.changePercent > filters.maxChangePercent) return false;
+    if (filters.minAnalystRating && stock.analystRating < filters.minAnalystRating) return false;
+    if (filters.minVolume && stock.volume < filters.minVolume * 1_000_000) return false;
+    if (filters.maxVolume && stock.volume > filters.maxVolume * 1_000_000) return false;
+    if (filters.minMarketCap && stock.marketCap < filters.minMarketCap * 1_000_000_000) return false;
+    if (filters.maxMarketCap && stock.marketCap > filters.maxMarketCap * 1_000_000_000) return false;
+    if (filters.minBeta && stock.beta < filters.minBeta) return false;
+    if (filters.maxBeta && stock.beta > filters.maxBeta) return false;
+    return true;
+  });
 
   // Sort stocks
   const sortedStocks = [...filteredStocks].sort((a, b) => {
@@ -171,19 +198,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
   useEffect(() => {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
-
-  if (isError) {
-    console.error('Stock list error:', error);
-    return (
-      <div className="p-8 text-center text-red-500">
-        Error loading stocks. Please try refreshing the page.
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
 
   if (!sortedStocks.length) {
     return (
