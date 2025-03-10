@@ -57,6 +57,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
     direction: 'asc' | 'desc';
   }>({ key: 'analystRating', direction: 'desc' });
   const [isTabActive, setIsTabActive] = useState(true);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const handleSort = useCallback((key: string) => {
     setSort(current => ({
@@ -172,6 +174,32 @@ export function StockList({ filters, setStocks }: StockListProps) {
     initialPageParam: 1,
   });
 
+  // Setup intersection observer for infinite loading
+  useEffect(() => {
+    if (!loadMoreRef.current || !hasNextPage) return;
+
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    observerRef.current = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observerRef.current.observe(loadMoreRef.current);
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   const allStocks = data?.pages.reduce((acc, page) => {
     const seenSymbols = new Set(acc.map(s => s.symbol));
     const newStocks = page.stocks.filter(s => !seenSymbols.has(s.symbol));
@@ -226,11 +254,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
         </div>
       )}
       <div className="w-full overflow-x-auto">
-        <div className="min-w-[550px] max-w-full">
+        <div className="min-w-[520px] max-w-full">
           <Table>
             <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
               <TableRow>
-                <TableHead className="sticky left-0 bg-background/95 backdrop-blur-sm min-w-[90px] z-20">
+                <TableHead className="sticky left-0 bg-background/95 backdrop-blur-sm min-w-[80px] z-20">
                   <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
                     Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
@@ -269,7 +297,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                 >
-                  <TableCell className="sticky left-0 bg-background/95 backdrop-blur-sm font-medium min-w-[90px] z-10">
+                  <TableCell className="sticky left-0 bg-background/95 backdrop-blur-sm font-medium min-w-[80px] z-10">
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
