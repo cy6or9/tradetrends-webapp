@@ -1,6 +1,36 @@
 const INITIAL_STOCKS = [
-  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'WMT',
-  'PFE', 'KO', 'PEP', 'DIS', 'NFLX', 'AMD', 'INTC', 'CSCO', 'ORCL', 'IBM'
+  // Technology
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'AMD', 'INTC', 'CSCO', 'ORCL', 'IBM', 'ADBE', 'CRM', 'NFLX', 'TSLA',
+  // Finance
+  'JPM', 'BAC', 'WFC', 'GS', 'MS', 'V', 'MA', 'AXP', 'BLK', 'C', 'USB', 'PNC', 'SCHW',
+  // Healthcare
+  'JNJ', 'PFE', 'UNH', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'LLY',
+  // Consumer
+  'WMT', 'PG', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'DIS', 'HD', 'SBUX', 'TGT', 'LOW',
+  // Industrial
+  'BA', 'CAT', 'GE', 'MMM', 'HON', 'UPS', 'FDX', 'LMT', 'RTX', 'DE',
+  // Energy
+  'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'PXD', 'PSX', 'VLO',
+  // Telecommunications
+  'T', 'VZ', 'TMUS', 'CMCSA',
+  // Real Estate
+  'AMT', 'PLD', 'CCI', 'EQIX', 'PSA',
+  // Materials
+  'LIN', 'APD', 'ECL', 'DD', 'NEM',
+  // Popular ETFs
+  'SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO', 'VGT', 'XLK', 'XLF', 'XLE',
+  // Emerging Tech
+  'PLTR', 'SNOW', 'NET', 'CRWD', 'DDOG', 'ZS', 'CFLT', 'MDB', 'GTLB',
+  // Electric Vehicles
+  'RIVN', 'LCID', 'NIO', 'XPEV',
+  // Semiconductors
+  'TSM', 'ASML', 'QCOM', 'TXN', 'AMAT', 'KLAC', 'LRCX', 'MU',
+  // Gaming
+  'ATVI', 'EA', 'TTWO', 'RBLX', 'U',
+  // Fintech
+  'SQ', 'PYPL', 'COIN', 'AFRM', 'SOFI',
+  // Travel
+  'MAR', 'HLT', 'ABNB', 'BKNG', 'UAL', 'DAL', 'AAL', 'CCL', 'RCL'
 ];
 
 import { type Express } from "express";
@@ -87,6 +117,11 @@ async function fetchStockData(symbol: string): Promise<any> {
       isAfterHoursTrading: Boolean(quote.ap && quote.ap !== quote.c),
       industryRank: 0, // Will be calculated in batch
       analystRating: Math.floor(Math.random() * 20) + 80,
+      // Location data
+      city: profile.city || null,
+      state: profile.state || null,
+      country: profile.country || null,
+      // Existing fields
       firstListed: new Date(),
       lastUpdate: new Date(),
       nextUpdate: new Date(Date.now() + 5 * 60 * 1000),

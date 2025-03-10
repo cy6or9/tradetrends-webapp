@@ -29,6 +29,11 @@ export const stocks = pgTable("stocks", {
   isAfterHoursTrading: boolean("is_after_hours_trading"),
   industryRank: integer("industry_rank"),
   earningsDate: timestamp("earnings_date"),
+  // Location fields
+  city: text("city"),
+  state: text("state"),
+  country: text("country"),
+  // Existing fields
   lastUpdate: timestamp("last_update").notNull().defaultNow(),
   nextUpdate: timestamp("next_update").notNull(),
   firstListed: timestamp("first_listed").notNull(),
