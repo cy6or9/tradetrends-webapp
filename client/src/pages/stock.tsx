@@ -53,6 +53,12 @@ export default function StockPage() {
     );
   }
 
+  // Format the last update time in user's local timezone
+  const lastTradeTime = new Date(stock.lastUpdate).toLocaleString(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  });
+
   return (
     <div className="container mx-auto p-4 space-y-6">
       <Card>
@@ -79,6 +85,9 @@ export default function StockPage() {
                     {stock.changePercent.toFixed(2)}%
                   </span>
                 </div>
+                <span className="text-sm text-muted-foreground ml-2">
+                  Last Trade: {lastTradeTime}
+                </span>
               </div>
             </div>
           </div>
@@ -115,7 +124,7 @@ export default function StockPage() {
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Float</div>
-              <div>{(stock.float / 1e6).toFixed(2)}M shares</div>
+              <div>{stock.float ? `${(stock.float / 1e6).toFixed(2)}M shares` : 'N/A'}</div>
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Dividend Yield</div>
@@ -134,9 +143,11 @@ export default function StockPage() {
                 <div className="text-sm text-muted-foreground">After Hours</div>
                 <div className="flex items-center gap-1">
                   ${stock.afterHoursPrice?.toFixed(2)}
-                  <span className={stock.afterHoursChange > 0 ? "text-green-500" : "text-red-500"}>
-                    ({stock.afterHoursChange.toFixed(2)}%)
-                  </span>
+                  {stock.afterHoursChange && (
+                    <span className={stock.afterHoursChange > 0 ? "text-green-500" : "text-red-500"}>
+                      ({stock.afterHoursChange.toFixed(2)}%)
+                    </span>
+                  )}
                 </div>
               </div>
             )}
