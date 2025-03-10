@@ -37,6 +37,7 @@ export default function Home() {
   const [allStocksExpanded, setAllStocksExpanded] = useState(false);
   const [favoritesExpanded, setFavoritesExpanded] = useState(true);
   const [favoriteStocksCount, setFavoriteStocksCount] = useState(0);
+  const [hasActiveFilters, setHasActiveFilters] = useState(false);
 
   // Hot stocks criteria - completely independent from filters
   const hotStocksFilter = {
@@ -50,6 +51,22 @@ export default function Home() {
     }
   }, [favoriteStocksCount]);
 
+  // Check if there are any active filters
+  const handleFilterChange = (newFilters: any) => {
+    setFilters(newFilters);
+    setHasActiveFilters(
+      Object.entries(newFilters).some(([key, value]) => {
+        if (key === 'sortBy' && value === 'analystRating') return false;
+        if (key === 'sortDir' && value === 'desc') return false;
+        if (key === 'exchange' && value === 'Any') return false;
+        if (key === 'industry' && value === 'Any') return false;
+        if (key === 'tradingApp' && value === 'Any') return false;
+        if (key === 'minPrice' && value === '0.03') return false;
+        return value !== undefined && value !== '' && value !== false;
+      })
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile menu toggle */}
@@ -60,13 +77,21 @@ export default function Home() {
         onClick={() => setIsMenuOpen(!isMenuOpen)}
       >
         <Menu className="h-4 w-4" />
+        {hasActiveFilters && (
+          <Badge variant="secondary" className="ml-2">Filters Active</Badge>
+        )}
       </Button>
 
       {/* Filters in sliding menu - only affects All Stocks section */}
       <SlidingMenu isOpen={isMenuOpen} onToggle={() => setIsMenuOpen(!isMenuOpen)}>
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-cyan-500">Filters & Sorting</h2>
-          <StockFilters onFilterChange={setFilters} />
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-cyan-500">Filters & Sorting</h2>
+            {hasActiveFilters && (
+              <Badge variant="secondary">Filters Active</Badge>
+            )}
+          </div>
+          <StockFilters onFilterChange={handleFilterChange} />
         </div>
       </SlidingMenu>
 
@@ -95,7 +120,7 @@ export default function Home() {
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="ipo" className="text-cyan-500">IPO Calendar</TabsTrigger>
                 <TabsTrigger value="spacs" className="text-cyan-500">SPACs</TabsTrigger>
-                <TabsTrigger value="stocks" className="text-cyan-500">Hot Stocks</TabsTrigger>
+                <TabsTrigger value="stocks" className="text-cyan-500">Market Activity</TabsTrigger>
               </TabsList>
 
               <div className="h-[min(400px,50vh)] overflow-hidden">
@@ -165,6 +190,9 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <span>All Stocks</span>
                 <span className="text-sm text-muted-foreground">({allStocksCount} stocks)</span>
+                {hasActiveFilters && (
+                  <Badge variant="secondary" className="ml-2">Filters Active</Badge>
+                )}
               </div>
               {allStocksExpanded ? (
                 <ChevronDown className="h-5 w-5" />

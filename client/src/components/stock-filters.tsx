@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { stockCache } from "@/lib/stockCache";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 
 const TRADING_APPS = [
@@ -148,6 +148,10 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
   return (
     <Form {...form}>
       <form
+        onSubmit={(e) => {
+          e.preventDefault(); // Prevent form submission
+          onFilterChange(form.getValues());
+        }}
         onChange={() => onFilterChange(form.getValues())}
         className="space-y-4"
       >
@@ -168,6 +172,12 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                       handleSearchChange(e.target.value);
                     }}
                     onFocus={() => field.value && setShowSuggestions(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault(); // Prevent form submission on enter
+                        onFilterChange(form.getValues());
+                      }
+                    }}
                     className="border-cyan-500/20 focus-visible:ring-cyan-500/20"
                   />
                 </FormControl>
@@ -179,7 +189,8 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
                           key={suggestion.symbol}
                           variant="ghost"
                           className="w-full justify-start text-left hover:bg-cyan-500/10"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.preventDefault(); // Prevent form submission
                             form.setValue("search", suggestion.symbol);
                             setShowSuggestions(false);
                             onFilterChange(form.getValues());
@@ -550,10 +561,11 @@ export function StockFilters({ onFilterChange }: StockFiltersProps) {
             )}
           />
           <Button
-            type="reset"
+            type="button" // Changed from "reset" to "button"
             variant="outline"
             className="w-full hover:bg-cyan-500/10 hover:text-cyan-500 border-cyan-500/20"
-            onClick={() => {
+            onClick={(e) => {
+              e.preventDefault(); // Prevent form submission
               form.reset({
                 minPrice: "0.03",
                 sortBy: "analystRating",
