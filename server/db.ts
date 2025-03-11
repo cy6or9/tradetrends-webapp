@@ -8,11 +8,11 @@ neonConfig.webSocketConstructor = ws;
 // Get DATABASE_URL or gracefully handle missing in development
 const DATABASE_URL = process.env.DATABASE_URL;
 
-// In production environment, we need to handle the missing DATABASE_URL gracefully
+// In production environment, DATABASE_URL is required
 if (!DATABASE_URL) {
   if (process.env.NODE_ENV === 'production') {
     console.error("DATABASE_URL is not set in production environment!");
-    // Continue execution to allow application to serve a friendly error page
+    throw new Error("DATABASE_URL environment variable is required in production. Please set it in the Secrets tab in the Deployment configuration.");
   } else {
     console.warn("DATABASE_URL is not set, using placeholder for development only");
   }

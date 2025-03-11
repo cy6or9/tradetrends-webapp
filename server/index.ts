@@ -48,8 +48,8 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
-    // Set development mode explicitly
-    process.env.NODE_ENV = 'development';
+    // Use NODE_ENV from environment or default to development
+    process.env.NODE_ENV = process.env.NODE_ENV || 'development';
     log('Starting server initialization...', 'server');
 
     const server = await registerRoutes(app);
