@@ -91,5 +91,5 @@ export {
   TableBody,
   TableRow,
   TableHead,
-  TableCell,
+  TableCell
 }
