@@ -26,6 +26,10 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
+    if (!db) {
+      console.error("Database not connected. Cannot perform getUser operation.");
+      return undefined;
+    }
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
