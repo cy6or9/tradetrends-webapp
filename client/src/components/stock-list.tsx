@@ -290,11 +290,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
             <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
           </div>
         )}
-        <div className="h-[600px] overflow-auto">
+        <div className="relative h-[600px]">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="sticky left-0 bg-background/95 backdrop-blur-sm w-[120px]">
+                <TableHead className="sticky left-0 w-[120px]">
                   <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
                     Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
@@ -343,7 +343,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                 >
-                  <TableCell className="sticky left-0 bg-background/95 backdrop-blur-sm font-medium">
+                  <TableCell className="sticky left-0 font-medium">
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
