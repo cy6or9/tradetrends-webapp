@@ -290,8 +290,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
             <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
           </div>
         )}
-        <div className="w-full overflow-hidden">
-          <div className="min-w-[520px] max-w-full overflow-x-auto">
+        <div className="w-full relative">
+          <div className="overflow-auto max-h-[600px]">
             <Table>
               <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-30">
                 <TableRow>
@@ -337,7 +337,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className="overflow-y-auto">
+              <TableBody>
                 {sortedStocks.map((stock) => (
                   <TableRow
                     key={stock.symbol}
@@ -390,13 +390,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
               </TableBody>
             </Table>
           </div>
-
-          <div ref={loadMoreRef} className="py-4 text-center">
+        </div>
+        <div ref={loadMoreRef} className="py-4 text-center">
             {isFetchingNextPage && (
               <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
             )}
           </div>
-        </div>
       </Card>
     </TooltipProvider>
   );
