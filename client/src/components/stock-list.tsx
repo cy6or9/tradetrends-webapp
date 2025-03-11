@@ -291,111 +291,113 @@ export function StockList({ filters, setStocks }: StockListProps) {
           </div>
         )}
         <div className="w-full relative">
-          <div className="overflow-auto max-h-[600px]">
-            <Table>
-              <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-30">
-                <TableRow>
-                  <TableHead className="sticky left-0 bg-background/95 backdrop-blur-sm w-[120px] z-30">
-                    <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
-                      Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="w-[200px] min-w-[200px] bg-background/95 backdrop-blur-sm">
-                    <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
-                      Name <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="w-[100px] min-w-[100px] bg-background/95 backdrop-blur-sm">
-                    <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full justify-between">
-                      Price <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="w-[110px] min-w-[110px] bg-background/95 backdrop-blur-sm">
-                    <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full justify-between">
-                      Change <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="w-[120px] min-w-[120px] bg-background/95 backdrop-blur-sm">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium justify-between">
-                        Rate <ArrowUpDown className="ml-2 h-4 w-4" />
+          <div className="max-h-[600px] overflow-y-auto">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-30">
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-background/95 backdrop-blur-sm w-[120px] z-30">
+                      <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
+                        Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                       </Button>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
-                            <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
-                          </Button>
-                        </TooltipTrigger>
-                        <RatingInfoTooltip />
-                      </Tooltip>
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-[100px] min-w-[100px] bg-background/95 backdrop-blur-sm">
-                    <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
-                      Vol <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedStocks.map((stock) => (
-                  <TableRow
-                    key={stock.symbol}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
-                  >
-                    <TableCell className="sticky left-0 bg-background/95 backdrop-blur-sm font-medium min-w-[80px] z-10">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleFavorite(stock.symbol);
-                          }}
-                        >
-                          <Star
-                            className={cn(
-                              "h-4 w-4",
-                              favorites.has(stock.symbol) ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
-                            )}
-                          />
-                        </Button>
-                        {stock.symbol}
-                      </div>
-                    </TableCell>
-                    <TableCell className="min-w-[160px]">{stock.name}</TableCell>
-                    <TableCell className="min-w-[80px]">${stock.price.toFixed(2)}</TableCell>
-                    <TableCell className="min-w-[90px]">
+                    </TableHead>
+                    <TableHead className="w-[200px] min-w-[200px] bg-background/95 backdrop-blur-sm">
+                      <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
+                        Name <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[100px] min-w-[100px] bg-background/95 backdrop-blur-sm">
+                      <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full justify-between">
+                        Price <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[110px] min-w-[110px] bg-background/95 backdrop-blur-sm">
+                      <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full justify-between">
+                        Change <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[120px] min-w-[120px] bg-background/95 backdrop-blur-sm">
                       <div className="flex items-center gap-1">
-                        {stock.changePercent > 0 ? (
-                          <TrendingUp className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <TrendingDown className="w-4 h-4 text-red-500" />
-                        )}
-                        <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
-                          {stock.changePercent.toFixed(2)}%
-                        </span>
+                        <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium justify-between">
+                          Rate <ArrowUpDown className="ml-2 h-4 w-4" />
+                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
+                              <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
+                            </Button>
+                          </TooltipTrigger>
+                          <RatingInfoTooltip />
+                        </Tooltip>
                       </div>
-                    </TableCell>
-                    <TableCell className="min-w-[60px]">
-                      <Badge variant={stock.analystRating >= 85 ? "default" : "secondary"}>
-                        {stock.analystRating}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="min-w-[70px]">{stock.volume.toLocaleString()}</TableCell>
+                    </TableHead>
+                    <TableHead className="w-[100px] min-w-[100px] bg-background/95 backdrop-blur-sm">
+                      <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
+                        Vol <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {sortedStocks.map((stock) => (
+                    <TableRow
+                      key={stock.symbol}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
+                    >
+                      <TableCell className="sticky left-0 bg-background/95 backdrop-blur-sm font-medium min-w-[80px] z-10">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(stock.symbol);
+                            }}
+                          >
+                            <Star
+                              className={cn(
+                                "h-4 w-4",
+                                favorites.has(stock.symbol) ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
+                              )}
+                            />
+                          </Button>
+                          {stock.symbol}
+                        </div>
+                      </TableCell>
+                      <TableCell>{stock.name}</TableCell>
+                      <TableCell>${stock.price.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {stock.changePercent > 0 ? (
+                            <TrendingUp className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <TrendingDown className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
+                            {stock.changePercent.toFixed(2)}%
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={stock.analystRating >= 85 ? "default" : "secondary"}>
+                          {stock.analystRating}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{stock.volume.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
-        </div>
-        <div ref={loadMoreRef} className="py-4 text-center">
+          <div ref={loadMoreRef} className="py-4 text-center">
             {isFetchingNextPage && (
               <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
             )}
           </div>
+        </div>
       </Card>
     </TooltipProvider>
   );
