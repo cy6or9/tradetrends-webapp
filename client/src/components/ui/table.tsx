@@ -23,7 +23,7 @@ const TableHeader = React.forwardRef<
   <thead 
     ref={ref} 
     className={cn(
-      "[&_tr]:border-b sticky top-0 z-20",
+      "[&_tr]:border-b sticky top-0 z-20 before:content-[''] before:absolute before:inset-0 before:bg-background/95 before:backdrop-blur before:supports-[backdrop-filter]:bg-background/95",
       className
     )} 
     {...props} 
@@ -80,7 +80,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-4 text-left align-middle font-medium text-muted-foreground bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 [&:has([role=checkbox])]:pr-0",
+      "h-12 px-4 text-left align-middle font-medium text-muted-foreground relative z-[1] [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props}

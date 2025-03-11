@@ -291,8 +291,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
           </div>
         )}
         <div className="relative h-[600px] overflow-hidden">
-          <div className="overflow-y-auto h-full">
-            <div className="min-w-[800px] overflow-x-auto">
+          <div className="h-full overflow-auto">
+            <div className="min-w-[800px]">
               <Table>
                 <TableHeader>
                   <TableRow>
