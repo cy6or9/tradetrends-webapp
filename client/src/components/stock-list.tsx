@@ -126,6 +126,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
       const hotStocks = cachedStocks
+        // First filter out stocks under $0.03
+        .filter(stock => stock.price >= 0.03)
         .filter(stock =>
           // Price change factor (40%)
           (Math.abs(stock.changePercent) * 4) +
