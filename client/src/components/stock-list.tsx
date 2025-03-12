@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import {
@@ -136,8 +136,16 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }));
   }, []);
 
-  const fetchStocks = async ({ pageParam = 1 }) => {
-    try {
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+  } = useInfiniteQuery({
+    queryKey: ["/api/stocks", filters, forceUpdate],
+    queryFn: async ({ pageParam = 1 }) => {
       if (filters.isFavorite) {
         const favoriteStocks = await stockCache.getFavorites();
         return {
@@ -149,99 +157,44 @@ export function StockList({ filters, setStocks }: StockListProps) {
         };
       }
 
-      const searchParams = new URLSearchParams({
-        page: pageParam.toString(),
-        limit: '50',
-      });
+      try {
+        const response = await fetch(`/api/stocks/search?page=${pageParam}&limit=50`);
+        if (!response.ok) throw new Error('Failed to fetch stocks');
+        const data = await response.json();
 
-      if (filters.search) {
-        searchParams.append('search', filters.search.toUpperCase());
-      } else {
-        if (filters.tradingApp && filters.tradingApp !== 'Any') {
-          searchParams.append('tradingApp', filters.tradingApp);
+        const stocks = Array.isArray(data.stocks) ? data.stocks : [];
+        if (stocks.length > 0) {
+          await stockCache.updateStocks(stocks);
         }
-        if (filters.industry && filters.industry !== 'Any') {
-          searchParams.append('industry', filters.industry);
-        }
-        if (filters.exchange && filters.exchange !== 'Any') {
-          searchParams.append('exchange', filters.exchange);
-        }
-      }
-
-      if (!isOnline) {
-        const allStocks = await stockCache.getAllStocks();
-        let filteredStocks = [...allStocks];
-
-        if (filters.search) {
-          filteredStocks = filteredStocks.filter(stock =>
-            stock.symbol.includes(filters.search!.toUpperCase()) ||
-            stock.name.toUpperCase().includes(filters.search!.toUpperCase())
-          );
-        }
-
-        if (filters.industry && filters.industry !== 'Any') {
-          filteredStocks = filteredStocks.filter(stock => stock.industry === filters.industry);
-        }
-
-        if (filters.exchange && filters.exchange !== 'Any') {
-          filteredStocks = filteredStocks.filter(stock => stock.exchange === filters.exchange);
-        }
-
-        const start = (pageParam - 1) * 50;
-        const end = start + 50;
-        const paginatedStocks = filteredStocks.slice(start, end);
 
         return {
           pages: [{
-            stocks: paginatedStocks,
-            hasMore: end < filteredStocks.length,
-            total: filteredStocks.length
+            stocks,
+            hasMore: data.hasMore || false,
+            total: data.total || stocks.length
+          }]
+        };
+      } catch (error) {
+        console.error('Error fetching stocks:', error);
+        if (!isOnline) {
+          const cachedStocks = await stockCache.getAllStocks();
+          return {
+            pages: [{
+              stocks: cachedStocks,
+              hasMore: false,
+              total: cachedStocks.length
+            }]
+          };
+        }
+        return {
+          pages: [{
+            stocks: [],
+            hasMore: false,
+            total: 0
           }]
         };
       }
-
-      const response = await fetch(`/api/stocks/search?${searchParams}`);
-      if (!response.ok) throw new Error('Failed to fetch stocks');
-      const data = await response.json();
-
-      // Ensure data.stocks exists and is an array
-      const stocks = Array.isArray(data.stocks) ? data.stocks : [];
-      const filteredStocks = stocks.filter((stock) => stock.price >= 0.03);
-
-      if (filteredStocks.length > 0) {
-        await stockCache.updateStocks(filteredStocks);
-      }
-
-      return {
-        pages: [{
-          stocks: filteredStocks,
-          hasMore: data.hasMore || false,
-          total: data.total || filteredStocks.length
-        }]
-      };
-    } catch (error) {
-      console.error('Error fetching stocks:', error);
-      // Return empty data structure on error
-      return {
-        pages: [{
-          stocks: [],
-          hasMore: false,
-          total: 0
-        }]
-      };
-    }
-  };
-
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isError,
-  } = useInfiniteQuery({
-    queryKey: ["/api/stocks", filters, forceUpdate],
-    queryFn: fetchStocks,
+    },
     getNextPageParam: (lastPage) => {
       const page = lastPage.pages?.[0];
       if (!page?.hasMore) return undefined;
@@ -249,7 +202,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     },
     staleTime: 30000,
     initialPageParam: 1,
-    retry: 2,
   });
 
   const allStocks = React.useMemo(() => {
