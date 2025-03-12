@@ -96,8 +96,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
   useEffect(() => {
     async function loadFavorites() {
       try {
-        const allStocks = await stockCache.getAllStocks();
-        const favoriteStocks = allStocks.filter(stock => stock.isFavorite);
+        const favoriteStocks = await stockCache.getFavorites();
+        console.log('Initial favorites loaded:', favoriteStocks.length);
         setFavorites(new Set(favoriteStocks.map(stock => stock.symbol)));
       } catch (error) {
         console.error('Failed to load favorites:', error);
@@ -138,22 +138,30 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, []);
 
   const fetchStocks = async ({ pageParam = 1 }) => {
-    try {
-      const allStocks = await stockCache.getAllStocks();
-      let filteredStocks = allStocks;
-
-      if (filters.isFavorite) {
-        filteredStocks = allStocks.filter(stock => favorites.has(stock.symbol));
-        console.log('Filtered favorite stocks:', filteredStocks.length);
+    if (filters.isFavorite) {
+      try {
+        const allStocks = await stockCache.getAllStocks();
+        const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
+        console.log('Fetching favorites:', favoriteStocks.length);
         return {
-          stocks: filteredStocks,
+          stocks: favoriteStocks,
           hasMore: false,
-          total: filteredStocks.length
+          total: favoriteStocks.length
+        };
+      } catch (error) {
+        console.error('Failed to fetch favorites:', error);
+        return {
+          stocks: [],
+          hasMore: false,
+          total: 0
         };
       }
+    }
 
-      if (filters.isHotStock) {
-        filteredStocks = allStocks
+    if (filters.isHotStock) {
+      try {
+        const cachedStocks = await stockCache.getAllStocks();
+        const hotStocks = cachedStocks
           .filter(stock => stock.price >= 0.03)
           .filter(stock =>
             (Math.abs(stock.changePercent) * 4) +
@@ -173,27 +181,55 @@ export function StockList({ filters, setStocks }: StockListProps) {
           });
 
         return {
-          stocks: filteredStocks,
+          stocks: hotStocks,
           hasMore: false,
-          total: filteredStocks.length
+          total: hotStocks.length
+        };
+      } catch (error) {
+        console.error('Failed to fetch hot stocks:', error);
+        return {
+          stocks: [],
+          hasMore: false,
+          total: 0
         };
       }
+    }
 
+    const searchParams = new URLSearchParams({
+      page: pageParam.toString(),
+      limit: '50',
+    });
+
+    if (filters.search) {
+      searchParams.append('search', filters.search.toUpperCase());
+    } else {
+      if (filters.tradingApp && filters.tradingApp !== 'Any') {
+        searchParams.append('tradingApp', filters.tradingApp);
+      }
+      if (filters.industry && filters.industry !== 'Any') {
+        searchParams.append('industry', filters.industry);
+      }
+      if (filters.exchange && filters.exchange !== 'Any') {
+        searchParams.append('exchange', filters.exchange);
+      }
+    }
+
+    try {
       if (!isOnline) {
-        if (filters.search) {
-          filteredStocks = allStocks.filter(stock =>
-            stock.symbol.includes(filters.search!.toUpperCase()) ||
-            stock.name.toUpperCase().includes(filters.search!.toUpperCase())
-          );
-        }
-
-        if (filters.industry && filters.industry !== 'Any') {
-          filteredStocks = filteredStocks.filter(stock => stock.industry === filters.industry);
-        }
-
-        if (filters.exchange && filters.exchange !== 'Any') {
-          filteredStocks = filteredStocks.filter(stock => stock.exchange === filters.exchange);
-        }
+        const cachedStocks = await stockCache.getAllStocks();
+        const filteredStocks = cachedStocks.filter(stock => {
+          if (filters.search) {
+            return stock.symbol.includes(filters.search.toUpperCase()) ||
+                   stock.name.toUpperCase().includes(filters.search.toUpperCase());
+          }
+          if (filters.industry && filters.industry !== 'Any') {
+            return stock.industry === filters.industry;
+          }
+          if (filters.exchange && filters.exchange !== 'Any') {
+            return stock.exchange === filters.exchange;
+          }
+          return true;
+        });
 
         const start = (pageParam - 1) * 50;
         const end = start + 50;
@@ -206,25 +242,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
         };
       }
 
-      const searchParams = new URLSearchParams({
-        page: pageParam.toString(),
-        limit: '50',
-      });
-
-      if (filters.search) {
-        searchParams.append('search', filters.search.toUpperCase());
-      } else {
-        if (filters.tradingApp && filters.tradingApp !== 'Any') {
-          searchParams.append('tradingApp', filters.tradingApp);
-        }
-        if (filters.industry && filters.industry !== 'Any') {
-          searchParams.append('industry', filters.industry);
-        }
-        if (filters.exchange && filters.exchange !== 'Any') {
-          searchParams.append('exchange', filters.exchange);
-        }
-      }
-
       const response = await fetch(`/api/stocks/search?${searchParams}`);
       if (!response.ok) throw new Error('Failed to fetch stocks');
       const data = await response.json();
@@ -234,9 +251,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
         await stockCache.updateStocks(data.stocks);
       }
 
-      return data;
+      return {
+        ...data,
+        stocks: data.stocks
+      };
     } catch (error) {
       console.error('Error fetching stocks:', error);
+
       const cachedStocks = await stockCache.getAllStocks();
       return {
         stocks: cachedStocks,
@@ -315,7 +336,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      // Update UI state immediately
+      // Update UI immediately
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (prev.has(symbol)) {
@@ -326,13 +347,15 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
 
-      // Update storage
+      // Persist change in background
       await stockCache.toggleFavorite(symbol);
 
-      // If we're on favorites view, update the query data immediately
+      // If we're on favorites view, refresh the data immediately
       if (filters.isFavorite) {
         const allStocks = await stockCache.getAllStocks();
-        const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
+        const favoriteStocks = allStocks.filter(stock => 
+          favorites.has(stock.symbol) || stock.symbol === symbol
+        );
         queryClient.setQueryData(
           ["/api/stocks", filters, forceUpdate],
           { pages: [{ stocks: favoriteStocks, hasMore: false, total: favoriteStocks.length }] }
@@ -390,51 +413,55 @@ export function StockList({ filters, setStocks }: StockListProps) {
         <div className="relative h-[600px]">
           <div className="absolute inset-0 overflow-auto">
             <div className="min-w-[800px]">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[120px] z-40">
-                      <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
-                        Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
-                      </Button>
-                    </TableHead>
-                    <TableHead className="w-[200px]">
-                      <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
-                        Name <ArrowUpDown className="ml-2 h-4 w-4" />
-                      </Button>
-                    </TableHead>
-                    <TableHead className="w-[100px]">
-                      <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full justify-between">
-                        Price <ArrowUpDown className="ml-2 h-4 w-4" />
-                      </Button>
-                    </TableHead>
-                    <TableHead className="w-[110px]">
-                      <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full justify-between">
-                        Change <ArrowUpDown className="ml-2 h-4 w-4" />
-                      </Button>
-                    </TableHead>
-                    <TableHead className="w-[120px]">
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium justify-between">
-                          Rate <ArrowUpDown className="ml-2 h-4 w-4" />
+              <div className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[120px] z-40">
+                        <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
+                          Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
-                              <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
-                            </Button>
-                          </TooltipTrigger>
-                          <RatingInfoTooltip />
-                        </Tooltip>
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[100px]">
-                      <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
-                        Vol <ArrowUpDown className="ml-2 h-4 w-4" />
-                      </Button>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
+                      </TableHead>
+                      <TableHead className="w-[200px]">
+                        <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
+                          Name <ArrowUpDown className="ml-2 h-4 w-4" />
+                        </Button>
+                      </TableHead>
+                      <TableHead className="w-[100px]">
+                        <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full justify-between">
+                          Price <ArrowUpDown className="ml-2 h-4 w-4" />
+                        </Button>
+                      </TableHead>
+                      <TableHead className="w-[110px]">
+                        <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full justify-between">
+                          Change <ArrowUpDown className="ml-2 h-4 w-4" />
+                        </Button>
+                      </TableHead>
+                      <TableHead className="w-[120px]">
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium justify-between">
+                            Rate <ArrowUpDown className="ml-2 h-4 w-4" />
+                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
+                                <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
+                              </Button>
+                            </TooltipTrigger>
+                            <RatingInfoTooltip />
+                          </Tooltip>
+                        </div>
+                      </TableHead>
+                      <TableHead className="w-[100px]">
+                        <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
+                          Vol <ArrowUpDown className="ml-2 h-4 w-4" />
+                        </Button>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                </Table>
+              </div>
+              <Table>
                 <TableBody>
                   {sortedStocks.map((stock) => (
                     <TableRow
