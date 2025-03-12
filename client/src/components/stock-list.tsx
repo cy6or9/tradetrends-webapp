@@ -140,7 +140,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (filters.isFavorite) {
       try {
         const allStocks = await stockCache.getAllStocks();
-        const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
+        const favoriteStocks = allStocks
+          .filter(stock => favorites.has(stock.symbol))
+          .map(stock => ({ ...stock, isFavorite: true }));
 
         return {
           stocks: favoriteStocks,
@@ -346,29 +348,44 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
 
-      // Persist change in background
-      await stockCache.toggleFavorite(symbol);
+      // Get the current stock data
+      const allStocks = await stockCache.getAllStocks();
+      const targetStock = allStocks.find(s => s.symbol === symbol);
 
-      // If we're on favorites view, update the query cache
+      if (!targetStock) {
+        throw new Error('Stock not found');
+      }
+
+      // If we're on favorites view, update the query cache immediately
       if (filters.isFavorite) {
-        const allStocks = await stockCache.getAllStocks();
-        const favoriteStocks = allStocks.filter(stock => {
-          const isCurrentlyFavorite = !favorites.has(symbol) ? symbol === stock.symbol : favorites.has(stock.symbol);
-          return isCurrentlyFavorite;
-        });
+        const currentData = queryClient.getQueryData(["/api/stocks", filters, forceUpdate]) as any;
+        const currentStocks = currentData?.pages[0]?.stocks || [];
+
+        let newStocks;
+        if (favorites.has(symbol)) {
+          // We just added this stock to favorites
+          newStocks = [...currentStocks, { ...targetStock, isFavorite: true }];
+        } else {
+          // We just removed this stock from favorites
+          newStocks = currentStocks.filter((s: any) => s.symbol !== symbol);
+        }
 
         queryClient.setQueryData(
           ["/api/stocks", filters, forceUpdate],
-          { 
+          {
             pages: [{
-              stocks: favoriteStocks,
+              stocks: newStocks,
               hasMore: false,
-              total: favoriteStocks.length
+              total: newStocks.length
             }],
             pageParams: [1]
           }
         );
       }
+
+      // Persist change in background
+      await stockCache.toggleFavorite(symbol);
+
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
       // Revert UI state on error
@@ -382,7 +399,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
     }
-  }, [filters.isFavorite, favorites, queryClient]);
+  }, [filters.isFavorite, favorites, queryClient, forceUpdate]);
 
   if (isError) {
     return (
