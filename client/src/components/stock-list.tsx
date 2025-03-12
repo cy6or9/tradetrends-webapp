@@ -386,21 +386,21 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       <TableHead className="w-[100px]">
                         <div className="text-right pr-4">
                           <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 font-medium">
-                            Price <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+                            Price <ArrowUpDown className="ml-2 h-4 w-4" />
                           </Button>
                         </div>
                       </TableHead>
                       <TableHead className="w-[110px]">
                         <div className="text-right pr-4">
                           <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 font-medium">
-                            Change <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+                            Change <ArrowUpDown className="ml-2 h-4 w-4" />
                           </Button>
                         </div>
                       </TableHead>
                       <TableHead className="w-[120px]">
-                        <div className="text-right pr-4 flex items-center justify-end gap-1">
+                        <div className="text-right pr-4">
                           <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 font-medium">
-                            Rate <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+                            Rate <ArrowUpDown className="ml-2 h-4 w-4" />
                           </Button>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -415,77 +415,71 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       <TableHead className="w-[100px]">
                         <div className="text-right pr-4">
                           <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 font-medium">
-                            Vol <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+                            Vol <ArrowUpDown className="ml-2 h-4 w-4" />
                           </Button>
                         </div>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
-                </Table>
-              </div>
-              <Table>
-                <TableBody>
-                  {sortedStocks.map((stock) => (
-                    <TableRow
-                      key={stock.symbol}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
-                    >
-                      <TableCell className="sticky left-0 bg-background font-medium w-[120px]">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleFavorite(stock.symbol);
-                            }}
-                          >
-                            <Star
-                              className={cn(
-                                "h-4 w-4",
-                                favorites.has(stock.symbol) ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
-                              )}
-                            />
-                          </Button>
-                          {stock.symbol}
-                        </div>
-                      </TableCell>
-                      <TableCell className="w-[300px]">{stock.name}</TableCell>
-                      <TableCell className="w-[100px]">
-                        <div className="text-right pr-4">
+                  <TableBody>
+                    {sortedStocks.map((stock) => (
+                      <TableRow
+                        key={stock.symbol}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
+                      >
+                        <TableCell className="sticky left-0 bg-background font-medium w-[120px]">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleFavorite(stock.symbol);
+                              }}
+                            >
+                              <Star
+                                className={cn(
+                                  "h-4 w-4",
+                                  favorites.has(stock.symbol) ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
+                                )}
+                              />
+                            </Button>
+                            {stock.symbol}
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-[300px]">{stock.name}</TableCell>
+                        <TableCell className="w-[100px] text-right pr-4">
                           ${stock.price.toFixed(2)}
-                        </div>
-                      </TableCell>
-                      <TableCell className="w-[110px]">
-                        <div className="flex items-center gap-1 justify-end pr-4">
-                          {stock.changePercent > 0 ? (
-                            <TrendingUp className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <TrendingDown className="w-4 h-4 text-red-500" />
-                          )}
-                          <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
-                            {stock.changePercent.toFixed(2)}%
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="w-[120px]">
-                        <div className="text-right pr-4">
+                        </TableCell>
+                        <TableCell className="w-[110px] text-right pr-4">
+                          <div className="flex items-center gap-1">
+                            {stock.changePercent > 0 ? (
+                              <TrendingUp className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <TrendingDown className="h-4 w-4 text-red-500" />
+                            )}
+                            <span className={stock.changePercent > 0 ? "text-green-500" : "text-red-500"}>
+                              {stock.changePercent.toFixed(2)}%
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-[120px] text-right pr-4">
                           <Badge variant={stock.analystRating >= 85 ? "default" : "secondary"}>
                             {stock.analystRating}%
                           </Badge>
-                        </div>
-                      </TableCell>
-                      <TableCell className="w-[100px]">
-                        <div className="text-right pr-4">
+                        </TableCell>
+                        <TableCell className="w-[100px] text-right pr-4">
                           {stock.volume.toLocaleString()}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <Table>
+                </Table>
             </div>
           </div>
         </div>
