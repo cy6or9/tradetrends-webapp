@@ -141,6 +141,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
       try {
         const allStocks = await stockCache.getAllStocks();
         const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
+
         return {
           stocks: favoriteStocks,
           hasMore: false,
@@ -334,7 +335,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      // Update UI immediately
+      // Update local state immediately
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (prev.has(symbol)) {
@@ -348,13 +349,24 @@ export function StockList({ filters, setStocks }: StockListProps) {
       // Persist change in background
       await stockCache.toggleFavorite(symbol);
 
-      // If we're on favorites view, update the query data immediately
+      // If we're on favorites view, update the query cache
       if (filters.isFavorite) {
         const allStocks = await stockCache.getAllStocks();
-        const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
+        const favoriteStocks = allStocks.filter(stock => {
+          const isCurrentlyFavorite = !favorites.has(symbol) ? symbol === stock.symbol : favorites.has(stock.symbol);
+          return isCurrentlyFavorite;
+        });
+
         queryClient.setQueryData(
           ["/api/stocks", filters, forceUpdate],
-          { pages: [{ stocks: favoriteStocks, hasMore: false, total: favoriteStocks.length }] }
+          { 
+            pages: [{
+              stocks: favoriteStocks,
+              hasMore: false,
+              total: favoriteStocks.length
+            }],
+            pageParams: [1]
+          }
         );
       }
     } catch (error) {
