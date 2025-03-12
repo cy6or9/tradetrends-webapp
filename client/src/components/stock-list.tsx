@@ -309,9 +309,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
           <div className="absolute inset-0 overflow-auto">
             <div className="min-w-[800px] relative">
               <Table>
-                <TableHeader className="sticky top-0 bg-background z-30">
+                <TableHeader className="sticky top-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-background z-30 w-[120px]">
+                    <TableHead className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[120px] z-40">
                       <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
                         Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                       </Button>
