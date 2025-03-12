@@ -111,7 +111,6 @@ class StockCache {
 
   async updateStock(stock: CachedStock): Promise<void> {
     try {
-      // Always set isFavorite based on the favorites Set
       const validatedData = stockCacheSchema.parse({
         ...stock,
         isFavorite: this.favorites.has(stock.symbol)
@@ -163,11 +162,12 @@ class StockCache {
   async getFavorites(): Promise<CachedStock[]> {
     try {
       const stocks = await this.db.stocks.toArray();
-      return stocks.filter(stock => this.favorites.has(stock.symbol))
+      const favoriteStocks = stocks.filter(stock => this.favorites.has(stock.symbol))
         .map(stock => ({
           ...stock,
           isFavorite: true
         }));
+      return favoriteStocks;
     } catch (error) {
       console.error('Failed to get favorites:', error);
       return [];
@@ -182,18 +182,18 @@ class StockCache {
         return false;
       }
 
-      // Toggle favorite status in memory
       if (this.favorites.has(symbol)) {
         this.favorites.delete(symbol);
       } else {
         this.favorites.add(symbol);
       }
 
-      // Update database and localStorage
-      await this.db.stocks.put({
+      const updatedStock = {
         ...stock,
         isFavorite: this.favorites.has(symbol)
-      });
+      };
+
+      await this.db.stocks.put(updatedStock);
       this.saveFavoritesToStorage();
 
       return this.favorites.has(symbol);
@@ -205,7 +205,6 @@ class StockCache {
 
   async clear(): Promise<void> {
     try {
-      // Keep favorite stocks when clearing cache
       const favoriteStocks = await this.getFavorites();
       await this.db.stocks.clear();
       if (favoriteStocks.length > 0) {

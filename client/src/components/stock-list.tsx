@@ -97,7 +97,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     async function loadFavorites() {
       try {
         const favoriteStocks = await stockCache.getFavorites();
-        console.log('Initial favorites loaded:', favoriteStocks.length);
         setFavorites(new Set(favoriteStocks.map(stock => stock.symbol)));
       } catch (error) {
         console.error('Failed to load favorites:', error);
@@ -142,7 +141,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
       try {
         const allStocks = await stockCache.getAllStocks();
         const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
-        console.log('Fetching favorites:', favoriteStocks.length);
         return {
           stocks: favoriteStocks,
           hasMore: false,
@@ -350,12 +348,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
       // Persist change in background
       await stockCache.toggleFavorite(symbol);
 
-      // If we're on favorites view, refresh the data immediately
+      // If we're on favorites view, update the query data immediately
       if (filters.isFavorite) {
         const allStocks = await stockCache.getAllStocks();
-        const favoriteStocks = allStocks.filter(stock => 
-          favorites.has(stock.symbol) || stock.symbol === symbol
-        );
+        const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
         queryClient.setQueryData(
           ["/api/stocks", filters, forceUpdate],
           { pages: [{ stocks: favoriteStocks, hasMore: false, total: favoriteStocks.length }] }
