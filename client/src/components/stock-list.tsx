@@ -356,140 +356,130 @@ export function StockList({ filters, setStocks }: StockListProps) {
             <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
           </div>
         )}
-        <div className="h-[600px] overflow-hidden relative">
+        {/* Main table container */}
+        <div className="h-[600px] relative">
           <div className="absolute inset-0 overflow-auto">
-            <div className="min-w-[800px]">
-              {/* Fixed header */}
-              <div className="sticky top-0 z-50">
-                <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 border-b border-border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead
-                          className="sticky left-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 border-r border-border w-[120px]"
-                        >
-                          <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-12 text-left font-medium w-full justify-between">
-                            Symbol <ArrowUpDown className="h-4 w-4" />
-                          </Button>
-                        </TableHead>
-                        <TableHead className="w-[300px]">
-                          <Button variant="ghost" onClick={() => handleSort('name')} className="h-12 text-left font-medium w-full justify-between">
-                            Name <ArrowUpDown className="h-4 w-4" />
-                          </Button>
-                        </TableHead>
-                        <TableHead className="w-[100px]">
-                          <div className="text-right">
-                            <Button variant="ghost" onClick={() => handleSort('price')} className="h-12 font-medium px-0">
-                              Price <ArrowUpDown className="h-4 w-4" />
+            <div className="min-w-[800px] relative">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+                    <TableHead
+                      className="sticky left-0 top-0 z-[100] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 border-r border-border w-[120px]"
+                    >
+                      <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-12 text-left font-medium w-full justify-between">
+                        Symbol <ArrowUpDown className="h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="sticky top-0 z-[90] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[300px]">
+                      <Button variant="ghost" onClick={() => handleSort('name')} className="h-12 text-left font-medium w-full justify-between">
+                        Name <ArrowUpDown className="h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="sticky top-0 z-[90] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[100px]">
+                      <div className="text-right">
+                        <Button variant="ghost" onClick={() => handleSort('price')} className="h-12 font-medium px-0">
+                          Price <ArrowUpDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableHead>
+                    <TableHead className="sticky top-0 z-[90] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[110px]">
+                      <div className="text-right">
+                        <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-12 font-medium px-0">
+                          Change <ArrowUpDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableHead>
+                    <TableHead className="sticky top-0 z-[90] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[120px]">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-12 font-medium px-0">
+                          Rate <ArrowUpDown className="h-4 w-4" />
+                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
+                              <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
                             </Button>
-                          </div>
-                        </TableHead>
-                        <TableHead className="w-[110px]">
-                          <div className="text-right">
-                            <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-12 font-medium px-0">
-                              Change <ArrowUpDown className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableHead>
-                        <TableHead className="w-[120px]">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-12 font-medium px-0">
-                              Rate <ArrowUpDown className="h-4 w-4" />
-                            </Button>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
-                                  <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
-                                </Button>
-                              </TooltipTrigger>
-                              <RatingInfoTooltip />
-                            </Tooltip>
-                          </div>
-                        </TableHead>
-                        <TableHead className="w-[100px]">
-                          <div className="text-right">
-                            <Button variant="ghost" onClick={() => handleSort('volume')} className="h-12 font-medium px-0">
-                              Vol <ArrowUpDown className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                  </Table>
-                </div>
-              </div>
-
-              {/* Scrollable content */}
-              <div className="relative">
-                <Table>
-                  <TableBody>
-                    {sortedStocks.map((stock) => (
-                      <TableRow
-                        key={stock.symbol}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
+                          </TooltipTrigger>
+                          <RatingInfoTooltip />
+                        </Tooltip>
+                      </div>
+                    </TableHead>
+                    <TableHead className="sticky top-0 z-[90] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[100px]">
+                      <div className="text-right">
+                        <Button variant="ghost" onClick={() => handleSort('volume')} className="h-12 font-medium px-0">
+                          Vol <ArrowUpDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedStocks.map((stock) => (
+                    <TableRow
+                      key={stock.symbol}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
+                    >
+                      <TableCell
+                        className="sticky left-0 z-[80] bg-background border-r border-border w-[120px]"
                       >
-                        <TableCell
-                          className="sticky left-0 z-40 bg-background border-r border-border w-[120px]"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleFavorite(stock.symbol);
-                              }}
-                            >
-                              <Star
-                                className={cn(
-                                  "h-4 w-4",
-                                  favorites.has(stock.symbol) ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
-                                )}
-                              />
-                            </Button>
-                            {stock.symbol}
-                          </div>
-                        </TableCell>
-                        <TableCell className="w-[300px]">{stock.name}</TableCell>
-                        <TableCell className="w-[100px] text-right">${stock.price.toFixed(2)}</TableCell>
-                        <TableCell className="w-[110px] text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {stock.changePercent > 0 ? (
-                              <TrendingUp className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <TrendingDown className="h-4 w-4 text-red-500" />
-                            )}
-                            <span
-                              className={
-                                stock.changePercent > 0 ? "text-green-500" : "text-red-500"
-                              }
-                            >
-                              {stock.changePercent.toFixed(2)}%
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="w-[120px] text-right">
-                          <Badge
-                            variant={stock.analystRating >= 85 ? "default" : "secondary"}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(stock.symbol);
+                            }}
                           >
-                            {stock.analystRating}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="w-[100px] text-right">
-                          {stock.volume.toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                            <Star
+                              className={cn(
+                                "h-4 w-4",
+                                favorites.has(stock.symbol) ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"
+                              )}
+                            />
+                          </Button>
+                          {stock.symbol}
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-[300px]">{stock.name}</TableCell>
+                      <TableCell className="w-[100px] text-right">${stock.price.toFixed(2)}</TableCell>
+                      <TableCell className="w-[110px] text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {stock.changePercent > 0 ? (
+                            <TrendingUp className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-500" />
+                          )}
+                          <span
+                            className={
+                              stock.changePercent > 0 ? "text-green-500" : "text-red-500"
+                            }
+                          >
+                            {stock.changePercent.toFixed(2)}%
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-[120px] text-right">
+                        <Badge
+                          variant={stock.analystRating >= 85 ? "default" : "secondary"}
+                        >
+                          {stock.analystRating}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="w-[100px] text-right">
+                        {stock.volume.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
 
-                <div ref={loadMoreRef} className="py-4 text-center">
-                  {isFetchingNextPage && (
-                    <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
-                  )}
-                </div>
+              <div ref={loadMoreRef} className="py-4 text-center">
+                {isFetchingNextPage && (
+                  <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
+                )}
               </div>
             </div>
           </div>
