@@ -64,8 +64,8 @@ class StockDatabase extends Dexie {
 
   constructor() {
     super('StockDatabase');
-    this.version(2).stores({
-      stocks: 'symbol,name,isFavorite'
+    this.version(4).stores({
+      stocks: 'symbol,isFavorite'  // Keep schema simple, just index what we need
     });
   }
 }
@@ -95,7 +95,10 @@ class StockCache {
         // Update isFavorite flag in IndexedDB
         await Promise.all(
           favoriteSymbols.map(async (symbol) => {
-            await this.db.stocks.update(symbol, { isFavorite: true });
+            const stock = await this.db.stocks.get(symbol);
+            if (stock) {
+              await this.db.stocks.update(symbol, { ...stock, isFavorite: true });
+            }
           })
         );
       }
@@ -116,11 +119,14 @@ class StockCache {
     try {
       const validatedData = stockCacheSchema.parse(stock);
       const existingStock = await this.db.stocks.get(stock.symbol);
-      if (existingStock) {
-        // Preserve favorite status when updating
-        validatedData.isFavorite = existingStock.isFavorite;
-      }
-      await this.db.stocks.put(validatedData);
+
+      // Merge with existing data, preserving favorite status
+      const updatedStock = {
+        ...validatedData,
+        isFavorite: existingStock?.isFavorite || false
+      };
+
+      await this.db.stocks.put(updatedStock);
     } catch (error) {
       console.error(`Failed to update stock ${stock.symbol}:`, error);
     }
@@ -132,10 +138,10 @@ class StockCache {
       const validatedStocks = stocks.map((stock, index) => {
         const existingStock = existingStocks[index];
         const validatedData = stockCacheSchema.parse(stock);
-        if (existingStock) {
-          validatedData.isFavorite = existingStock.isFavorite;
-        }
-        return validatedData;
+        return {
+          ...validatedData,
+          isFavorite: existingStock?.isFavorite || false
+        };
       });
       await this.db.stocks.bulkPut(validatedStocks);
     } catch (error) {
@@ -165,7 +171,7 @@ class StockCache {
   async getFavorites(): Promise<CachedStock[]> {
     try {
       const favorites = await this.db.stocks.where('isFavorite').equals(true).toArray();
-      console.log('Retrieved favorites:', favorites); // Debug log
+      console.log('Retrieved favorites:', favorites.length, 'stocks');
       return favorites;
     } catch (error) {
       console.error('Failed to get favorites:', error);
@@ -182,9 +188,13 @@ class StockCache {
       }
 
       const newFavoriteStatus = !stock.isFavorite;
-      await this.db.stocks.update(symbol, { isFavorite: newFavoriteStatus });
 
-      // Log the update operation
+      // Update the stock with new favorite status
+      await this.db.stocks.update(symbol, {
+        ...stock,
+        isFavorite: newFavoriteStatus
+      });
+
       console.log(`Toggled favorite for ${symbol} to ${newFavoriteStatus}`);
 
       // Update localStorage favorites
