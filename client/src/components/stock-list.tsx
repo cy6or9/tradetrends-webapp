@@ -384,21 +384,21 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         </Button>
                       </TableHead>
                       <TableHead className="w-[100px]">
-                        <div className="text-right pr-4">
+                        <div className="text-right">
                           <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 font-medium">
                             Price <ArrowUpDown className="ml-2 h-4 w-4" />
                           </Button>
                         </div>
                       </TableHead>
                       <TableHead className="w-[110px]">
-                        <div className="text-right pr-4">
+                        <div className="text-right">
                           <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 font-medium">
                             Change <ArrowUpDown className="ml-2 h-4 w-4" />
                           </Button>
                         </div>
                       </TableHead>
                       <TableHead className="w-[120px]">
-                        <div className="text-right pr-4">
+                        <div className="text-right flex items-center justify-end gap-1">
                           <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 font-medium">
                             Rate <ArrowUpDown className="ml-2 h-4 w-4" />
                           </Button>
@@ -413,7 +413,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         </div>
                       </TableHead>
                       <TableHead className="w-[100px]">
-                        <div className="text-right pr-4">
+                        <div className="text-right">
                           <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 font-medium">
                             Vol <ArrowUpDown className="ml-2 h-4 w-4" />
                           </Button>
@@ -450,11 +450,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           </div>
                         </TableCell>
                         <TableCell className="w-[300px]">{stock.name}</TableCell>
-                        <TableCell className="w-[100px] text-right pr-4">
+                        <TableCell className="w-[100px] text-right">
                           ${stock.price.toFixed(2)}
                         </TableCell>
-                        <TableCell className="w-[110px] text-right pr-4">
-                          <div className="flex items-center gap-1">
+                        <TableCell className="w-[110px] text-right">
+                          <div className="flex items-center justify-end gap-1">
                             {stock.changePercent > 0 ? (
                               <TrendingUp className="h-4 w-4 text-green-500" />
                             ) : (
@@ -465,12 +465,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="w-[120px] text-right pr-4">
+                        <TableCell className="w-[120px] text-right">
                           <Badge variant={stock.analystRating >= 85 ? "default" : "secondary"}>
                             {stock.analystRating}%
                           </Badge>
                         </TableCell>
-                        <TableCell className="w-[100px] text-right pr-4">
+                        <TableCell className="w-[100px] text-right">
                           {stock.volume.toLocaleString()}
                         </TableCell>
                       </TableRow>
@@ -478,15 +478,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   </TableBody>
                 </Table>
               </div>
-              <Table>
-                </Table>
+              <div ref={loadMoreRef} className="py-4 text-center">
+                {isFetchingNextPage && (
+                  <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-        <div ref={loadMoreRef} className="py-4 text-center">
-          {isFetchingNextPage && (
-            <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
-          )}
         </div>
       </Card>
     </TooltipProvider>
