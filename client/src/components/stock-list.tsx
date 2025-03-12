@@ -21,6 +21,7 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 
+// Keep LoadingSpinner and RatingInfoTooltip components unchanged...
 const LoadingSpinner = () => (
   <div className="p-8 text-center text-muted-foreground">
     <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
@@ -34,7 +35,6 @@ const LoadingSpinner = () => (
 const RatingInfoTooltip = () => (
   <TooltipContent className="w-[350px] p-3 text-xs z-[9999] relative bg-popover/95 shadow-lg backdrop-blur-sm border-border/50">
     <p className="font-semibold mb-2">How the analyst rating calculation works:</p>
-
     <div className="space-y-2">
       <div>
         <p className="font-medium">Base Rating (0-100):</p>
@@ -46,7 +46,6 @@ const RatingInfoTooltip = () => (
           <li>Strong Sell: -25% weight (penalty)</li>
         </ul>
       </div>
-
       <div>
         <p className="font-medium">Quality Factors:</p>
         <ul className="list-disc pl-4 space-y-1">
@@ -55,7 +54,6 @@ const RatingInfoTooltip = () => (
           <li>No artificial cap - enables exceptional ratings</li>
         </ul>
       </div>
-
       <div>
         <p className="font-medium">Updates:</p>
         <ul className="list-disc pl-4 space-y-1">
@@ -105,13 +103,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     loadFavorites();
   }, []);
 
-  const handleSort = useCallback((key: string) => {
-    setSort(current => ({
-      key,
-      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  }, []);
-
   useEffect(() => {
     const handleVisibilityChange = () => {
       setIsTabActive(!document.hidden);
@@ -124,19 +115,27 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const fetchStocks = async ({ pageParam = 1 }) => {
     if (filters.isFavorite) {
-      const favoriteStocks = await stockCache.getFavorites();
-      return {
-        stocks: favoriteStocks,
-        hasMore: false,
-        total: favoriteStocks.length
-      };
+      try {
+        const favoriteStocks = await stockCache.getFavorites();
+        return {
+          stocks: favoriteStocks,
+          hasMore: false,
+          total: favoriteStocks.length
+        };
+      } catch (error) {
+        console.error('Failed to fetch favorites:', error);
+        return {
+          stocks: [],
+          hasMore: false,
+          total: 0
+        };
+      }
     }
 
     if (filters.isHotStock) {
       try {
         const cachedStocks = await stockCache.getAllStocks();
-        const hotStocks = cachedStocks
-          .filter(stock => stock.price >= 0.03)
+        const hotStocks = cachedStocks.filter(stock => stock.price >= 0.03)
           .filter(stock =>
             (Math.abs(stock.changePercent) * 4) +
             ((stock.volume > 1000000 ? 100 : (stock.volume / 10000)) * 0.25) +
@@ -194,14 +193,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
       const data = await response.json();
 
       if (data.stocks?.length > 0) {
-        data.stocks = data.stocks.filter(stock => stock.price >= 0.03);
         await stockCache.updateStocks(data.stocks);
       }
 
-      return {
-        ...data,
-        stocks: data.stocks
-      };
+      return data;
     } catch (error) {
       console.error('Error fetching stocks:', error);
       const cachedStocks = await stockCache.getAllStocks();
@@ -212,6 +207,63 @@ export function StockList({ filters, setStocks }: StockListProps) {
       };
     }
   };
+
+  const handleToggleFavorite = useCallback(async (symbol: string) => {
+    try {
+      // Update local state immediately
+      setFavorites(prev => {
+        const newFavorites = new Set(prev);
+        if (prev.has(symbol)) {
+          newFavorites.delete(symbol);
+        } else {
+          newFavorites.add(symbol);
+        }
+        return newFavorites;
+      });
+
+      // Find the stock in current data
+      const currentData = queryClient.getQueryData(["/api/stocks", filters, forceUpdate]) as any;
+      const allStocks = currentData?.pages?.flatMap((page: any) => page.stocks) || [];
+      const currentStock = allStocks.find((s: any) => s.symbol === symbol);
+
+      if (!currentStock) return;
+
+      // Persist the change
+      await stockCache.toggleFavorite(symbol);
+
+      // If we're on favorites view, update the query data immediately
+      if (filters.isFavorite) {
+        const currentStocks = currentData?.pages?.[0]?.stocks || [];
+        const newStocks = favorites.has(symbol)
+          ? currentStocks.filter((s: any) => s.symbol !== symbol)
+          : [...currentStocks, { ...currentStock, isFavorite: true }];
+
+        queryClient.setQueryData(
+          ["/api/stocks", filters, forceUpdate],
+          {
+            pages: [{
+              stocks: newStocks,
+              hasMore: false,
+              total: newStocks.length
+            }],
+            pageParams: [1]
+          }
+        );
+      }
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error);
+      // Revert UI state on error
+      setFavorites(prev => {
+        const newFavorites = new Set(prev);
+        if (newFavorites.has(symbol)) {
+          newFavorites.delete(symbol);
+        } else {
+          newFavorites.add(symbol);
+        }
+        return newFavorites;
+      });
+    }
+  }, [filters.isFavorite, favorites, queryClient, forceUpdate]);
 
   const {
     data,
@@ -280,63 +332,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
 
-  const handleToggleFavorite = useCallback(async (symbol: string) => {
-    try {
-      // Update local state immediately
-      setFavorites(prev => {
-        const newFavorites = new Set(prev);
-        if (prev.has(symbol)) {
-          newFavorites.delete(symbol);
-        } else {
-          newFavorites.add(symbol);
-        }
-        return newFavorites;
-      });
-
-      // Find the stock in current data
-      const stock = allStocks.find(s => s.symbol === symbol);
-      if (!stock) return;
-
-      // Update IndexedDB and localStorage
-      await stockCache.toggleFavorite(symbol);
-
-      // If we're on favorites view, update the query data immediately
-      if (filters.isFavorite) {
-        const updatedStock = { ...stock, isFavorite: !favorites.has(symbol) };
-        const queryData = queryClient.getQueryData(["/api/stocks", filters, forceUpdate]) as any;
-        const currentStocks = queryData?.pages?.[0]?.stocks || [];
-
-        const newStocks = favorites.has(symbol)
-          ? currentStocks.filter((s: any) => s.symbol !== symbol)
-          : [...currentStocks, updatedStock];
-
-        queryClient.setQueryData(
-          ["/api/stocks", filters, forceUpdate],
-          {
-            pages: [{
-              stocks: newStocks,
-              hasMore: false,
-              total: newStocks.length
-            }],
-            pageParams: [1]
-          }
-        );
-      }
-    } catch (error) {
-      console.error('Failed to toggle favorite:', error);
-      // Revert UI state on error
-      setFavorites(prev => {
-        const newFavorites = new Set(prev);
-        if (newFavorites.has(symbol)) {
-          newFavorites.delete(symbol);
-        } else {
-          newFavorites.add(symbol);
-        }
-        return newFavorites;
-      });
-    }
-  }, [filters.isFavorite, favorites, queryClient, forceUpdate, allStocks]);
-
   if (isError) {
     return (
       <div className="p-8 text-center text-red-500">
@@ -357,15 +352,16 @@ export function StockList({ filters, setStocks }: StockListProps) {
     );
   }
 
+  const handleSort = (key: string) => {
+    setSort(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
   return (
     <TooltipProvider>
       <Card>
-        {!isOnline && (
-          <div className="p-2 bg-yellow-500/10 border-b flex items-center justify-center gap-2 text-yellow-500">
-            <WifiOff className="h-4 w-4" />
-            <span className="text-sm">Offline mode - viewing cached data</span>
-          </div>
-        )}
         {!isTabActive && (
           <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-50">
             <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
@@ -383,7 +379,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead className="w-[250px]">
+                      <TableHead className="w-[200px]">
                         <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
                           Name <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
@@ -451,7 +447,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           {stock.symbol}
                         </div>
                       </TableCell>
-                      <TableCell className="w-[250px]">{stock.name}</TableCell>
+                      <TableCell className="w-[200px]">{stock.name}</TableCell>
                       <TableCell className="w-[100px] text-right">${stock.price.toFixed(2)}</TableCell>
                       <TableCell className="w-[110px] text-right">
                         <div className="flex items-center gap-1 justify-end">
