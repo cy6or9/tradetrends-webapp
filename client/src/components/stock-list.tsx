@@ -142,9 +142,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
         const favoriteStocks = await stockCache.getFavorites();
         return {
           pages: [{
-            stocks: favoriteStocks,
+            stocks: favoriteStocks || [],
             hasMore: false,
-            total: favoriteStocks.length
+            total: favoriteStocks?.length || 0
           }]
         };
       }
@@ -170,7 +170,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
       if (!isOnline) {
         const allStocks = await stockCache.getAllStocks();
-        let filteredStocks = allStocks;
+        let filteredStocks = [...allStocks];
 
         if (filters.search) {
           filteredStocks = filteredStocks.filter(stock =>
@@ -204,25 +204,29 @@ export function StockList({ filters, setStocks }: StockListProps) {
       if (!response.ok) throw new Error('Failed to fetch stocks');
       const data = await response.json();
 
-      if (data.stocks?.length > 0) {
-        data.stocks = data.stocks.filter((stock: any) => stock.price >= 0.03);
-        await stockCache.updateStocks(data.stocks);
+      // Ensure data.stocks exists and is an array
+      const stocks = Array.isArray(data.stocks) ? data.stocks : [];
+      const filteredStocks = stocks.filter((stock) => stock.price >= 0.03);
+
+      if (filteredStocks.length > 0) {
+        await stockCache.updateStocks(filteredStocks);
       }
 
       return {
         pages: [{
-          ...data,
-          stocks: data.stocks || []
+          stocks: filteredStocks,
+          hasMore: data.hasMore || false,
+          total: data.total || filteredStocks.length
         }]
       };
     } catch (error) {
       console.error('Error fetching stocks:', error);
-      const cachedStocks = await stockCache.getAllStocks();
+      // Return empty data structure on error
       return {
         pages: [{
-          stocks: cachedStocks,
+          stocks: [],
           hasMore: false,
-          total: cachedStocks.length
+          total: 0
         }]
       };
     }
@@ -245,53 +249,35 @@ export function StockList({ filters, setStocks }: StockListProps) {
     },
     staleTime: 30000,
     initialPageParam: 1,
+    retry: 2,
   });
 
-  useEffect(() => {
-    if (!loadMoreRef.current || !hasNextPage) return;
+  const allStocks = React.useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.reduce((acc, page) => {
+      if (!page?.stocks) return acc;
+      const seenSymbols = new Set(acc.map(s => s.symbol));
+      const newStocks = page.stocks.filter(s => !seenSymbols.has(s.symbol));
+      return [...acc, ...newStocks];
+    }, [] as any[]);
+  }, [data?.pages]);
 
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-    }
+  const sortedStocks = React.useMemo(() => {
+    if (!allStocks.length) return [];
+    return [...allStocks].sort((a, b) => {
+      const aVal = a[sort.key];
+      const bVal = b[sort.key];
+      const modifier = sort.direction === 'asc' ? 1 : -1;
 
-    observerRef.current = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage();
-        }
-      },
-      { threshold: 0.5 }
-    );
-
-    observerRef.current.observe(loadMoreRef.current);
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return (aVal - bVal) * modifier;
       }
-    };
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  const allStocks = data?.pages.reduce((acc, page) => {
-    const pageStocks = page.stocks || [];
-    const seenSymbols = new Set(acc.map(s => s.symbol));
-    const newStocks = pageStocks.filter(s => !seenSymbols.has(s.symbol));
-    return [...acc, ...newStocks];
-  }, [] as any[]) ?? [];
-
-  const sortedStocks = [...allStocks].sort((a, b) => {
-    const aVal = a[sort.key];
-    const bVal = b[sort.key];
-    const modifier = sort.direction === 'asc' ? 1 : -1;
-
-    if (typeof aVal === 'number' && typeof bVal === 'number') {
-      return (aVal - bVal) * modifier;
-    }
-    if (typeof aVal === 'string' && typeof bVal === 'string') {
-      return aVal.localeCompare(bVal) * modifier;
-    }
-    return 0;
-  });
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return aVal.localeCompare(bVal) * modifier;
+      }
+      return 0;
+    });
+  }, [allStocks, sort.key, sort.direction]);
 
   useEffect(() => {
     setStocks?.(sortedStocks);
