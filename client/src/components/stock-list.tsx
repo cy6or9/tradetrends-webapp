@@ -307,9 +307,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
         )}
         <div className="relative h-[600px]">
           <div className="absolute inset-0 overflow-auto">
-            <div className="min-w-[800px]">
+            <div className="min-w-[800px] relative">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 bg-background z-30">
                   <TableRow>
                     <TableHead className="sticky left-0 bg-background z-30 w-[120px]">
                       <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
