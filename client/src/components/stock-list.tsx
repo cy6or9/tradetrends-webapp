@@ -141,9 +141,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
       if (filters.isFavorite) {
         const favoriteStocks = await stockCache.getFavorites();
         return {
-          stocks: favoriteStocks,
-          hasMore: false,
-          total: favoriteStocks.length
+          pages: [{
+            stocks: favoriteStocks,
+            hasMore: false,
+            total: favoriteStocks.length
+          }]
         };
       }
 
@@ -190,9 +192,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
         const paginatedStocks = filteredStocks.slice(start, end);
 
         return {
-          stocks: paginatedStocks,
-          hasMore: end < filteredStocks.length,
-          total: filteredStocks.length
+          pages: [{
+            stocks: paginatedStocks,
+            hasMore: end < filteredStocks.length,
+            total: filteredStocks.length
+          }]
         };
       }
 
@@ -201,18 +205,25 @@ export function StockList({ filters, setStocks }: StockListProps) {
       const data = await response.json();
 
       if (data.stocks?.length > 0) {
-        data.stocks = data.stocks.filter(stock => stock.price >= 0.03);
+        data.stocks = data.stocks.filter((stock: any) => stock.price >= 0.03);
         await stockCache.updateStocks(data.stocks);
       }
 
-      return data;
+      return {
+        pages: [{
+          ...data,
+          stocks: data.stocks || []
+        }]
+      };
     } catch (error) {
       console.error('Error fetching stocks:', error);
       const cachedStocks = await stockCache.getAllStocks();
       return {
-        stocks: cachedStocks,
-        hasMore: false,
-        total: cachedStocks.length
+        pages: [{
+          stocks: cachedStocks,
+          hasMore: false,
+          total: cachedStocks.length
+        }]
       };
     }
   };
@@ -228,8 +239,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
     queryKey: ["/api/stocks", filters, forceUpdate],
     queryFn: fetchStocks,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.hasMore) return undefined;
-      return lastPage.total > (lastPage.stocks?.length || 0) ? Math.ceil(lastPage.stocks.length / 50) + 1 : undefined;
+      const page = lastPage.pages?.[0];
+      if (!page?.hasMore) return undefined;
+      return page.total > (page.stocks?.length || 0) ? Math.ceil(page.stocks.length / 50) + 1 : undefined;
     },
     staleTime: 30000,
     initialPageParam: 1,
@@ -261,8 +273,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const allStocks = data?.pages.reduce((acc, page) => {
+    const pageStocks = page.stocks || [];
     const seenSymbols = new Set(acc.map(s => s.symbol));
-    const newStocks = page.stocks.filter(s => !seenSymbols.has(s.symbol));
+    const newStocks = pageStocks.filter(s => !seenSymbols.has(s.symbol));
     return [...acc, ...newStocks];
   }, [] as any[]) ?? [];
 
@@ -286,7 +299,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      // Update UI immediately
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (prev.has(symbol)) {
@@ -297,10 +309,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
 
-      // Update storage
       await stockCache.toggleFavorite(symbol);
 
-      // If we're on favorites view, refresh the data immediately
       if (filters.isFavorite) {
         const favoriteStocks = await stockCache.getFavorites();
         queryClient.setQueryData(
@@ -310,7 +320,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
       }
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
-      // Revert UI on error
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (newFavorites.has(symbol)) {
