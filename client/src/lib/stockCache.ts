@@ -64,8 +64,8 @@ class StockDatabase extends Dexie {
 
   constructor() {
     super('StockDatabase');
-    this.version(1).stores({
-      stocks: 'symbol,name,price,changePercent,volume,marketCap,beta,exchange,industry,analystRating,lastUpdate,nextUpdate,*isFavorite'
+    this.version(2).stores({
+      stocks: 'symbol,name,isFavorite'
     });
   }
 }
@@ -95,10 +95,7 @@ class StockCache {
         // Update isFavorite flag in IndexedDB
         await Promise.all(
           favoriteSymbols.map(async (symbol) => {
-            const stock = await this.db.stocks.get(symbol);
-            if (stock) {
-              await this.db.stocks.update(symbol, { isFavorite: true });
-            }
+            await this.db.stocks.update(symbol, { isFavorite: true });
           })
         );
       }
@@ -136,7 +133,6 @@ class StockCache {
         const existingStock = existingStocks[index];
         const validatedData = stockCacheSchema.parse(stock);
         if (existingStock) {
-          // Preserve favorite status when updating
           validatedData.isFavorite = existingStock.isFavorite;
         }
         return validatedData;
@@ -168,7 +164,9 @@ class StockCache {
 
   async getFavorites(): Promise<CachedStock[]> {
     try {
-      return await this.db.stocks.where('isFavorite').equals(true).toArray();
+      const favorites = await this.db.stocks.where('isFavorite').equals(true).toArray();
+      console.log('Retrieved favorites:', favorites); // Debug log
+      return favorites;
     } catch (error) {
       console.error('Failed to get favorites:', error);
       return [];
@@ -178,18 +176,23 @@ class StockCache {
   async toggleFavorite(symbol: string): Promise<boolean> {
     try {
       const stock = await this.db.stocks.get(symbol);
-      if (stock) {
-        const newFavoriteStatus = !stock.isFavorite;
-        await this.db.stocks.update(symbol, { isFavorite: newFavoriteStatus });
-
-        // Update localStorage favorites
-        const favorites = await this.getFavorites();
-        const favoriteSymbols = favorites.map(s => s.symbol);
-        this.saveFavoritesToStorage(favoriteSymbols);
-
-        return newFavoriteStatus;
+      if (!stock) {
+        console.error(`Stock ${symbol} not found`);
+        return false;
       }
-      return false;
+
+      const newFavoriteStatus = !stock.isFavorite;
+      await this.db.stocks.update(symbol, { isFavorite: newFavoriteStatus });
+
+      // Log the update operation
+      console.log(`Toggled favorite for ${symbol} to ${newFavoriteStatus}`);
+
+      // Update localStorage favorites
+      const favorites = await this.getFavorites();
+      const favoriteSymbols = favorites.map(s => s.symbol);
+      this.saveFavoritesToStorage(favoriteSymbols);
+
+      return newFavoriteStatus;
     } catch (error) {
       console.error(`Failed to toggle favorite for ${symbol}:`, error);
       return false;
