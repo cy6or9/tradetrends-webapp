@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Star, TrendingUp, TrendingDown, ArrowUpDown, Info, Wifi, WifiOff } from "lucide-react";
+import { Star, TrendingUp, TrendingDown, ArrowUpDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { stockCache } from "@/lib/stockCache";
@@ -20,53 +20,6 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-
-const LoadingSpinner = () => (
-  <div className="p-8 text-center text-muted-foreground">
-    <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-    <p>Loading stocks...</p>
-    <p className="text-sm text-muted-foreground mt-2">
-      This may take a moment as we gather real-time market data
-    </p>
-  </div>
-);
-
-const RatingInfoTooltip = () => (
-  <TooltipContent className="w-[350px] p-3 text-xs z-[9999] relative bg-popover/95 shadow-lg backdrop-blur-sm border-border/50">
-    <p className="font-semibold mb-2">How the analyst rating calculation works:</p>
-
-    <div className="space-y-2">
-      <div>
-        <p className="font-medium">Base Rating (0-100):</p>
-        <ul className="list-disc pl-4 space-y-1">
-          <li>Strong Buy: 125% weight (enables ratings above 100% for strong conviction)</li>
-          <li>Buy: 100% weight</li>
-          <li>Hold: 50% weight</li>
-          <li>Sell: 0% weight</li>
-          <li>Strong Sell: -25% weight (penalty)</li>
-        </ul>
-      </div>
-
-      <div>
-        <p className="font-medium">Quality Factors:</p>
-        <ul className="list-disc pl-4 space-y-1">
-          <li>Analyst Coverage: Score reduced if less than 20 analysts</li>
-          <li>Price Target Impact: 30% of final score</li>
-          <li>No artificial cap - enables exceptional ratings</li>
-        </ul>
-      </div>
-
-      <div>
-        <p className="font-medium">Updates:</p>
-        <ul className="list-disc pl-4 space-y-1">
-          <li>Ratings update every 6 hours</li>
-          <li>Price targets factored when available</li>
-          <li>Historical data preserved</li>
-        </ul>
-      </div>
-    </div>
-  </TooltipContent>
-);
 
 interface StockListProps {
   filters: {
@@ -82,14 +35,7 @@ interface StockListProps {
 
 export function StockList({ filters, setStocks }: StockListProps) {
   const queryClient = useQueryClient();
-  const [sort, setSort] = useState<{
-    key: string;
-    direction: 'asc' | 'desc';
-  }>({ key: 'analystRating', direction: 'desc' });
-  const [isTabActive, setIsTabActive] = useState(true);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const [forceUpdate, setForceUpdate] = useState(0);
+  const [sort, setSort] = useState({ key: 'analystRating', direction: 'desc' as 'asc' | 'desc' });
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -100,20 +46,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
         setFavorites(new Set(favoriteStocks.map(stock => stock.symbol)));
       } catch (error) {
         console.error('Failed to load favorites:', error);
-        setFavorites(new Set());
       }
     }
     loadFavorites();
-  }, []);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      setIsTabActive(!document.hidden);
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
   }, []);
 
   useEffect(() => {
@@ -144,34 +79,53 @@ export function StockList({ filters, setStocks }: StockListProps) {
     isLoading,
     isError,
   } = useInfiniteQuery({
-    queryKey: ["/api/stocks", filters, forceUpdate],
+    queryKey: ["/api/stocks", filters],
     queryFn: async ({ pageParam = 1 }) => {
+      console.log('Fetching stocks with params:', { pageParam, filters });
+
       if (filters.isFavorite) {
         const favoriteStocks = await stockCache.getFavorites();
+        console.log('Fetched favorite stocks:', favoriteStocks.length);
         return {
           pages: [{
-            stocks: favoriteStocks || [],
+            stocks: favoriteStocks,
             hasMore: false,
-            total: favoriteStocks?.length || 0
+            total: favoriteStocks.length
           }]
         };
       }
 
+      const searchParams = new URLSearchParams({
+        page: pageParam.toString(),
+        limit: '50'
+      });
+
+      if (filters.search) {
+        searchParams.append('search', filters.search.toUpperCase());
+      }
+      if (filters.industry && filters.industry !== 'Any') {
+        searchParams.append('industry', filters.industry);
+      }
+      if (filters.exchange && filters.exchange !== 'Any') {
+        searchParams.append('exchange', filters.exchange);
+      }
+
       try {
-        const response = await fetch(`/api/stocks/search?page=${pageParam}&limit=50`);
+        const response = await fetch(`/api/stocks/search?${searchParams}`);
         if (!response.ok) throw new Error('Failed to fetch stocks');
         const data = await response.json();
+        console.log('API Response:', data);
 
-        const stocks = Array.isArray(data.stocks) ? data.stocks : [];
-        if (stocks.length > 0) {
-          await stockCache.updateStocks(stocks);
+        // Update cache with new stocks
+        if (Array.isArray(data.stocks) && data.stocks.length > 0) {
+          await stockCache.updateStocks(data.stocks);
         }
 
         return {
           pages: [{
-            stocks,
+            stocks: data.stocks || [],
             hasMore: data.hasMore || false,
-            total: data.total || stocks.length
+            total: data.total || 0
           }]
         };
       } catch (error) {
@@ -186,13 +140,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
             }]
           };
         }
-        return {
-          pages: [{
-            stocks: [],
-            hasMore: false,
-            total: 0
-          }]
-        };
+        throw error;
       }
     },
     getNextPageParam: (lastPage) => {
@@ -207,15 +155,15 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const allStocks = React.useMemo(() => {
     if (!data?.pages) return [];
     return data.pages.reduce((acc, page) => {
-      if (!page?.stocks) return acc;
+      if (!page.pages?.[0]?.stocks) return acc;
+      const stocks = page.pages[0].stocks;
       const seenSymbols = new Set(acc.map(s => s.symbol));
-      const newStocks = page.stocks.filter(s => !seenSymbols.has(s.symbol));
+      const newStocks = stocks.filter(s => !seenSymbols.has(s.symbol));
       return [...acc, ...newStocks];
     }, [] as any[]);
   }, [data?.pages]);
 
   const sortedStocks = React.useMemo(() => {
-    if (!allStocks.length) return [];
     return [...allStocks].sort((a, b) => {
       const aVal = a[sort.key];
       const bVal = b[sort.key];
@@ -252,8 +200,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
       if (filters.isFavorite) {
         const favoriteStocks = await stockCache.getFavorites();
         queryClient.setQueryData(
-          ["/api/stocks", filters, forceUpdate],
-          { pages: [{ stocks: favoriteStocks, hasMore: false, total: favoriteStocks.length }] }
+          ["/api/stocks", filters],
+          { pages: [{ pages: [{ stocks: favoriteStocks, hasMore: false, total: favoriteStocks.length }] }] }
         );
       }
     } catch (error) {
@@ -279,7 +227,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
   }
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+        <p>Loading stocks...</p>
+      </div>
+    );
   }
 
   if (!sortedStocks.length) {
@@ -293,24 +246,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
   return (
     <TooltipProvider>
       <Card>
-        {!isOnline && (
-          <div className="p-2 bg-yellow-500/10 border-b flex items-center justify-center gap-2 text-yellow-500">
-            <WifiOff className="h-4 w-4" />
-            <span className="text-sm">Offline mode - viewing cached data</span>
-          </div>
-        )}
-        {!isTabActive && (
-          <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
-          </div>
-        )}
         <div className="relative h-[600px]">
           <div className="absolute inset-0 overflow-auto">
             <div className="min-w-[800px]">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[120px] z-40">
+                    <TableHead className="w-[120px]">
                       <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
                         Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                       </Button>
@@ -337,11 +279,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         </Button>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
-                              <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <Info className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
-                          <RatingInfoTooltip />
+                          <TooltipContent>
+                            Analyst consensus rating
+                          </TooltipContent>
                         </Tooltip>
                       </div>
                     </TableHead>
@@ -359,7 +303,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                     >
-                      <TableCell className="sticky left-0 bg-background font-medium">
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="ghost"
@@ -406,11 +350,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
               </Table>
             </div>
           </div>
-        </div>
-        <div ref={loadMoreRef} className="py-4 text-center">
-          {isFetchingNextPage && (
-            <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
-          )}
         </div>
       </Card>
     </TooltipProvider>
