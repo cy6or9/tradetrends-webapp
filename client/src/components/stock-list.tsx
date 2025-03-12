@@ -311,27 +311,27 @@ export function StockList({ filters, setStocks }: StockListProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-background z-30">
+                    <TableHead className="sticky left-0 bg-background z-30 w-[120px]">
                       <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
                         Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                       </Button>
                     </TableHead>
-                    <TableHead>
+                    <TableHead className="w-[200px]">
                       <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
                         Name <ArrowUpDown className="ml-2 h-4 w-4" />
                       </Button>
                     </TableHead>
-                    <TableHead>
+                    <TableHead className="w-[100px]">
                       <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full justify-between">
                         Price <ArrowUpDown className="ml-2 h-4 w-4" />
                       </Button>
                     </TableHead>
-                    <TableHead>
+                    <TableHead className="w-[110px]">
                       <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full justify-between">
                         Change <ArrowUpDown className="ml-2 h-4 w-4" />
                       </Button>
                     </TableHead>
-                    <TableHead>
+                    <TableHead className="w-[120px]">
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium justify-between">
                           Rate <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -346,7 +346,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         </Tooltip>
                       </div>
                     </TableHead>
-                    <TableHead>
+                    <TableHead className="w-[100px]">
                       <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
                         Vol <ArrowUpDown className="ml-2 h-4 w-4" />
                       </Button>
