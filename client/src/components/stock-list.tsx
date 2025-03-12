@@ -385,22 +385,22 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       </TableHead>
                       <TableHead className="w-[100px]">
                         <div className="text-right">
-                          <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 font-medium">
-                            Price <ArrowUpDown className="ml-2 h-4 w-4" />
+                          <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 font-medium px-0">
+                            Price <ArrowUpDown className="h-4 w-4 ml-2" />
                           </Button>
                         </div>
                       </TableHead>
                       <TableHead className="w-[110px]">
                         <div className="text-right">
-                          <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 font-medium">
-                            Change <ArrowUpDown className="ml-2 h-4 w-4" />
+                          <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 font-medium px-0">
+                            Change <ArrowUpDown className="h-4 w-4 ml-2" />
                           </Button>
                         </div>
                       </TableHead>
                       <TableHead className="w-[120px]">
-                        <div className="text-right flex items-center justify-end gap-1">
-                          <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 font-medium">
-                            Rate <ArrowUpDown className="ml-2 h-4 w-4" />
+                        <div className="flex items-center justify-end">
+                          <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 font-medium px-0">
+                            Rate <ArrowUpDown className="h-4 w-4 ml-2" />
                           </Button>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -414,8 +414,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       </TableHead>
                       <TableHead className="w-[100px]">
                         <div className="text-right">
-                          <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 font-medium">
-                            Vol <ArrowUpDown className="ml-2 h-4 w-4" />
+                          <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 font-medium px-0">
+                            Vol <ArrowUpDown className="h-4 w-4 ml-2" />
                           </Button>
                         </div>
                       </TableHead>
