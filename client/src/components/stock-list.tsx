@@ -90,7 +90,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    async function loadFavorites() {
+    const loadFavorites = async () => {
       try {
         const favoriteStocks = await stockCache.getFavorites();
         setFavorites(new Set(favoriteStocks.map(stock => stock.symbol)));
@@ -98,8 +98,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
         console.error('Failed to load favorites:', error);
         setFavorites(new Set());
       }
-    }
+    };
+
     loadFavorites();
+
+    // Refresh favorites every 30 seconds
+    const interval = setInterval(loadFavorites, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -212,39 +217,42 @@ export function StockList({ filters, setStocks }: StockListProps) {
       // Store current favorites view state
       const wasShowingFavorites = filters.isFavorite;
 
-      setFavorites(prev => {
-        const newFavorites = new Set(prev);
-        if (prev.has(symbol)) {
-          newFavorites.delete(symbol);
-        } else {
-          newFavorites.add(symbol);
-        }
-        return newFavorites;
-      });
+      // Update local state immediately
+      const newFavorites = new Set(favorites);
+      const isCurrentlyFavorited = newFavorites.has(symbol);
 
+      if (isCurrentlyFavorited) {
+        newFavorites.delete(symbol);
+      } else {
+        newFavorites.add(symbol);
+      }
+      setFavorites(newFavorites);
+
+      // Persist the change
       await stockCache.toggleFavorite(symbol);
 
       // Invalidate and refetch while preserving favorites view state
       await queryClient.invalidateQueries({ queryKey: ["/api/stocks"] });
 
-      // If we were showing favorites, stay there
+      // If we were showing favorites, trigger a refresh
       if (wasShowingFavorites) {
         setForceUpdate(prev => prev + 1);
       }
 
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
+      // Revert UI state on error
       setFavorites(prev => {
-        const newFavorites = new Set(prev);
-        if (newFavorites.has(symbol)) {
-          newFavorites.delete(symbol);
+        const revertedFavorites = new Set(prev);
+        if (revertedFavorites.has(symbol)) {
+          revertedFavorites.delete(symbol);
         } else {
-          newFavorites.add(symbol);
+          revertedFavorites.add(symbol);
         }
-        return newFavorites;
+        return revertedFavorites;
       });
     }
-  }, [filters, queryClient]);
+  }, [filters.isFavorite, favorites, queryClient]);
 
   const {
     data,
@@ -352,61 +360,63 @@ export function StockList({ filters, setStocks }: StockListProps) {
           <div className="absolute inset-0 overflow-auto">
             <div className="min-w-[800px]">
               {/* Fixed header */}
-              <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead
-                        className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 border-r border-border w-[120px]"
-                      >
-                        <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-12 text-left font-medium w-full justify-between">
-                          Symbol <ArrowUpDown className="h-4 w-4" />
-                        </Button>
-                      </TableHead>
-                      <TableHead className="w-[300px]">
-                        <Button variant="ghost" onClick={() => handleSort('name')} className="h-12 text-left font-medium w-full justify-between">
-                          Name <ArrowUpDown className="h-4 w-4" />
-                        </Button>
-                      </TableHead>
-                      <TableHead className="w-[100px]">
-                        <div className="text-right">
-                          <Button variant="ghost" onClick={() => handleSort('price')} className="h-12 font-medium px-0">
-                            Price <ArrowUpDown className="h-4 w-4" />
+              <div className="sticky top-0 z-50">
+                <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 border-b border-border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead
+                          className="sticky left-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 border-r border-border w-[120px]"
+                        >
+                          <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-12 text-left font-medium w-full justify-between">
+                            Symbol <ArrowUpDown className="h-4 w-4" />
                           </Button>
-                        </div>
-                      </TableHead>
-                      <TableHead className="w-[110px]">
-                        <div className="text-right">
-                          <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-12 font-medium px-0">
-                            Change <ArrowUpDown className="h-4 w-4" />
+                        </TableHead>
+                        <TableHead className="w-[300px]">
+                          <Button variant="ghost" onClick={() => handleSort('name')} className="h-12 text-left font-medium w-full justify-between">
+                            Name <ArrowUpDown className="h-4 w-4" />
                           </Button>
-                        </div>
-                      </TableHead>
-                      <TableHead className="w-[120px]">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-12 font-medium px-0">
-                            Rate <ArrowUpDown className="h-4 w-4" />
-                          </Button>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
-                                <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
-                              </Button>
-                            </TooltipTrigger>
-                            <RatingInfoTooltip />
-                          </Tooltip>
-                        </div>
-                      </TableHead>
-                      <TableHead className="w-[100px]">
-                        <div className="text-right">
-                          <Button variant="ghost" onClick={() => handleSort('volume')} className="h-12 font-medium px-0">
-                            Vol <ArrowUpDown className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                </Table>
+                        </TableHead>
+                        <TableHead className="w-[100px]">
+                          <div className="text-right">
+                            <Button variant="ghost" onClick={() => handleSort('price')} className="h-12 font-medium px-0">
+                              Price <ArrowUpDown className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableHead>
+                        <TableHead className="w-[110px]">
+                          <div className="text-right">
+                            <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-12 font-medium px-0">
+                              Change <ArrowUpDown className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableHead>
+                        <TableHead className="w-[120px]">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-12 font-medium px-0">
+                              Rate <ArrowUpDown className="h-4 w-4" />
+                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
+                                  <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
+                                </Button>
+                              </TooltipTrigger>
+                              <RatingInfoTooltip />
+                            </Tooltip>
+                          </div>
+                        </TableHead>
+                        <TableHead className="w-[100px]">
+                          <div className="text-right">
+                            <Button variant="ghost" onClick={() => handleSort('volume')} className="h-12 font-medium px-0">
+                              Vol <ArrowUpDown className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                  </Table>
+                </div>
               </div>
 
               {/* Scrollable content */}
@@ -420,7 +430,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                       >
                         <TableCell
-                          className="sticky left-0 bg-background border-r border-border w-[120px]"
+                          className="sticky left-0 z-40 bg-background border-r border-border w-[120px]"
                         >
                           <div className="flex items-center gap-2">
                             <Button
