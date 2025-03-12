@@ -126,7 +126,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
       const hotStocks = cachedStocks
-        .filter(stock => 
+        .filter(stock =>
           // Price change factor (40%)
           (Math.abs(stock.changePercent) * 4) +
           // Volume factor (25%)
@@ -179,6 +179,8 @@ export function StockList({ filters, setStocks }: StockListProps) {
       const data = await response.json();
 
       if (data.stocks?.length > 0) {
+        // Filter out stocks under $0.03 before updating cache
+        data.stocks = data.stocks.filter(stock => stock.price >= 0.03);
         stockCache.updateStocks(data.stocks);
       }
 

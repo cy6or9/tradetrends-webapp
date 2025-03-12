@@ -42,7 +42,7 @@ class HotStockService {
       const stockCandles = await finnhubClient.stockCandles(stock.symbol, 'D', 
         Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000), 
         Math.floor(Date.now() / 1000));
-      
+
       if (stockCandles.v && stockCandles.v.length > 0) {
         const avgVolume = stockCandles.v.reduce((a, b) => a + b, 0) / stockCandles.v.length;
         const volumeIncrease = ((stock.volume - avgVolume) / avgVolume) * 100;
@@ -63,7 +63,7 @@ class HotStockService {
       const news = await finnhubClient.companyNews(stock.symbol, 
         new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         new Date().toISOString().split('T')[0]);
-      
+
       if (!news.length) return 0;
 
       // Calculate sentiment based on news volume and any available sentiment data
@@ -88,8 +88,8 @@ class HotStockService {
       return cached;
     }
 
-    // Skip penny stocks and stocks with very low volume
-    if (stock.price < 1 || stock.volume < 10000) {
+    // Skip penny stocks, stocks with very low volume, and stocks under $0.03
+    if (stock.price < 0.03 || stock.volume < 10000) {
       return {
         symbol: stock.symbol,
         score: 0,
@@ -138,8 +138,11 @@ class HotStockService {
 
   // Get hot stocks from a list of stocks
   async getHotStocks(stocks: Stock[]): Promise<Stock[]> {
+    // First filter out stocks under $0.03
+    const validStocks = stocks.filter(stock => stock.price >= 0.03);
+
     const scores = await Promise.all(
-      stocks.map(async (stock) => ({
+      validStocks.map(async (stock) => ({
         stock,
         hotScore: await this.calculateHotScore(stock)
       }))
