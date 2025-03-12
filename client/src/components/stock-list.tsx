@@ -139,11 +139,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const fetchStocks = async ({ pageParam = 1 }) => {
     if (filters.isFavorite) {
       try {
-        const allStocks = await stockCache.getAllStocks();
-        const favoriteStocks = allStocks
-          .filter(stock => favorites.has(stock.symbol))
-          .map(stock => ({ ...stock, isFavorite: true }));
-
+        const favoriteStocks = await stockCache.getFavorites();
         return {
           stocks: favoriteStocks,
           hasMore: false,
@@ -337,7 +333,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      // Update local state immediately
+      // Update UI state immediately
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (prev.has(symbol)) {
@@ -348,26 +344,21 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
 
-      // Get the current stock data
-      const allStocks = await stockCache.getAllStocks();
-      const targetStock = allStocks.find(s => s.symbol === symbol);
-
-      if (!targetStock) {
-        throw new Error('Stock not found');
-      }
-
       // If we're on favorites view, update the query cache immediately
       if (filters.isFavorite) {
-        const currentData = queryClient.getQueryData(["/api/stocks", filters, forceUpdate]) as any;
-        const currentStocks = currentData?.pages[0]?.stocks || [];
+        const currentStock = allStocks.find(s => s.symbol === symbol);
+        if (!currentStock) return;
+
+        const queryData = queryClient.getQueryData(["/api/stocks", filters, forceUpdate]) as any;
+        const currentStocks = queryData?.pages?.[0]?.stocks || [];
 
         let newStocks;
         if (favorites.has(symbol)) {
-          // We just added this stock to favorites
-          newStocks = [...currentStocks, { ...targetStock, isFavorite: true }];
-        } else {
-          // We just removed this stock from favorites
+          // Remove from favorites
           newStocks = currentStocks.filter((s: any) => s.symbol !== symbol);
+        } else {
+          // Add to favorites
+          newStocks = [...currentStocks, { ...currentStock, isFavorite: true }];
         }
 
         queryClient.setQueryData(
@@ -399,7 +390,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
     }
-  }, [filters.isFavorite, favorites, queryClient, forceUpdate]);
+  }, [filters.isFavorite, favorites, queryClient, forceUpdate, allStocks]);
 
   if (isError) {
     return (
@@ -413,7 +404,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return <LoadingSpinner />;
   }
 
-  if (!sortedStocks.length) {
+  if (!allStocks.length) {
     return (
       <div className="p-8 text-center text-muted-foreground">
         {filters.isFavorite ? "No favorite stocks yet." : "No stocks found matching your criteria."}
@@ -438,54 +429,52 @@ export function StockList({ filters, setStocks }: StockListProps) {
         <div className="relative h-[600px]">
           <div className="absolute inset-0 overflow-auto">
             <div className="min-w-[800px]">
-              <div className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[120px] z-40">
-                        <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
-                          Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[120px]">
+                      <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
+                        Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[250px]">
+                      <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
+                        Name <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[120px] text-right">
+                      <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-right font-medium w-full justify-between">
+                        Price <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[120px] text-right">
+                      <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-right font-medium w-full justify-between">
+                        Change <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[120px] text-right">
+                      <div className="flex items-center gap-1 justify-end">
+                        <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-right font-medium justify-between">
+                          Rate <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
-                      </TableHead>
-                      <TableHead className="w-[200px]">
-                        <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
-                          Name <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </Button>
-                      </TableHead>
-                      <TableHead className="w-[100px]">
-                        <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-left font-medium w-full justify-between">
-                          Price <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </Button>
-                      </TableHead>
-                      <TableHead className="w-[110px]">
-                        <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-left font-medium w-full justify-between">
-                          Change <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </Button>
-                      </TableHead>
-                      <TableHead className="w-[120px]">
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-left font-medium justify-between">
-                            Rate <ArrowUpDown className="ml-2 h-4 w-4" />
-                          </Button>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
-                                <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
-                              </Button>
-                            </TooltipTrigger>
-                            <RatingInfoTooltip />
-                          </Tooltip>
-                        </div>
-                      </TableHead>
-                      <TableHead className="w-[100px]">
-                        <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-left font-medium w-full justify-between">
-                          Vol <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </Button>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                </Table>
-              </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-transparent">
+                              <Info className="h-4 w-4 text-muted-foreground hover:text-cyan-500" />
+                            </Button>
+                          </TooltipTrigger>
+                          <RatingInfoTooltip />
+                        </Tooltip>
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[120px] text-right">
+                      <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-right font-medium w-full justify-between">
+                        Vol <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+              </Table>
               <Table>
                 <TableBody>
                   {sortedStocks.map((stock) => (
@@ -516,9 +505,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         </div>
                       </TableCell>
                       <TableCell>{stock.name}</TableCell>
-                      <TableCell>${stock.price.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
+                      <TableCell className="text-right">${stock.price.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center gap-1 justify-end">
                           {stock.changePercent > 0 ? (
                             <TrendingUp className="w-4 h-4 text-green-500" />
                           ) : (
@@ -529,12 +518,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Badge variant={stock.analystRating >= 85 ? "default" : "secondary"}>
                           {stock.analystRating}%
                         </Badge>
                       </TableCell>
-                      <TableCell>{stock.volume.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">{stock.volume.toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
