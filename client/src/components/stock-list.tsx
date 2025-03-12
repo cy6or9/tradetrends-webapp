@@ -125,16 +125,27 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
     if (filters.isHotStock) {
       const cachedStocks = stockCache.getAllStocks();
-      const hotStocks = cachedStocks.filter(stock =>
-        (stock.analystRating >= 90 && Math.abs(stock.changePercent) >= 2) ||
-        stock.analystRating >= 95
-      ).sort((a, b) => {
-        const aIsType1 = a.analystRating >= 90 && Math.abs(a.changePercent) >= 2;
-        const bIsType1 = b.analystRating >= 90 && Math.abs(b.changePercent) >= 2;
-        if (aIsType1 && !bIsType1) return -1;
-        if (!aIsType1 && bIsType1) return 1;
-        return b.analystRating - a.analystRating;
-      });
+      const hotStocks = cachedStocks
+        .filter(stock => 
+          // Price change factor (40%)
+          (Math.abs(stock.changePercent) * 4) +
+          // Volume factor (25%)
+          ((stock.volume > 1000000 ? 100 : (stock.volume / 10000)) * 0.25) +
+          // Analyst rating factor (15%)
+          (stock.analystRating * 0.15) +
+          // Additional factors (20% distributed)
+          (stock.beta > 1 ? 10 : 0) +
+          (stock.marketCap > 1000000000 ? 10 : 0) > 50
+        )
+        .sort((a, b) => {
+          const aScore = (Math.abs(a.changePercent) * 4) +
+                        ((a.volume > 1000000 ? 100 : (a.volume / 10000)) * 0.25) +
+                        (a.analystRating * 0.15);
+          const bScore = (Math.abs(b.changePercent) * 4) +
+                        ((b.volume > 1000000 ? 100 : (b.volume / 10000)) * 0.25) +
+                        (b.analystRating * 0.15);
+          return bScore - aScore;
+        });
 
       return {
         stocks: hotStocks,
