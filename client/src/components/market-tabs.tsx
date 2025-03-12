@@ -3,18 +3,24 @@ import { cn } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
 
 interface MarketTabsProps {
-  activeTab: string;
-  trackedStocks: number;
+  trackedStocks: {
+    ipo: number;
+    spacs: number;
+    hotStocks: number;
+  };
 }
 
-export function MarketTabs({ activeTab, trackedStocks }: MarketTabsProps) {
+export function MarketTabs({ trackedStocks }: MarketTabsProps) {
   const [location] = useLocation();
 
   const tabs = [
-    { name: "IPO Calendar", href: "/ipo" },
-    { name: "SPACs", href: "/spacs" },
-    { name: "Hot Stocks", href: "/hot-stocks" }
+    { name: "IPO Calendar", href: "/ipo", count: trackedStocks.ipo },
+    { name: "SPACs", href: "/spacs", count: trackedStocks.spacs },
+    { name: "Hot Stocks", href: "/hot-stocks", count: trackedStocks.hotStocks }
   ];
+
+  // Find the active tab
+  const activeTab = tabs.find(tab => location === tab.href) || tabs[0];
 
   return (
     <div className="border-b border-border">
@@ -37,7 +43,7 @@ export function MarketTabs({ activeTab, trackedStocks }: MarketTabsProps) {
         </nav>
 
         <Badge variant="outline" className="bg-green-500/10 text-green-500">
-          {trackedStocks} stocks tracked
+          {activeTab.count} stocks tracked
         </Badge>
       </div>
     </div>
