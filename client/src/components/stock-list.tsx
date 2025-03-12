@@ -378,25 +378,29 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead className="w-[200px]">
+                      <TableHead className="w-[300px]">
                         <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
                           Name <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead className="w-[100px] text-right">
-                        <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-right font-medium w-full justify-between px-2">
-                          Price <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </Button>
+                      <TableHead className="w-[100px]">
+                        <div className="text-right pr-4">
+                          <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 font-medium">
+                            Price <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+                          </Button>
+                        </div>
                       </TableHead>
-                      <TableHead className="w-[110px] text-right">
-                        <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-right font-medium w-full justify-between px-2">
-                          Change <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </Button>
+                      <TableHead className="w-[110px]">
+                        <div className="text-right pr-4">
+                          <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 font-medium">
+                            Change <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+                          </Button>
+                        </div>
                       </TableHead>
-                      <TableHead className="w-[120px] text-right">
-                        <div className="flex items-center gap-1 justify-end px-2">
-                          <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-right font-medium justify-between">
-                            Rate <ArrowUpDown className="ml-2 h-4 w-4" />
+                      <TableHead className="w-[120px]">
+                        <div className="text-right pr-4 flex items-center justify-end gap-1">
+                          <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 font-medium">
+                            Rate <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
                           </Button>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -408,10 +412,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           </Tooltip>
                         </div>
                       </TableHead>
-                      <TableHead className="w-[100px] text-right">
-                        <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-right font-medium w-full justify-between px-2">
-                          Vol <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </Button>
+                      <TableHead className="w-[100px]">
+                        <div className="text-right pr-4">
+                          <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 font-medium">
+                            Vol <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+                          </Button>
+                        </div>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -446,10 +452,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           {stock.symbol}
                         </div>
                       </TableCell>
-                      <TableCell className="w-[200px]">{stock.name}</TableCell>
-                      <TableCell className="w-[100px] text-right px-2">${stock.price.toFixed(2)}</TableCell>
-                      <TableCell className="w-[110px] text-right px-2">
-                        <div className="flex items-center gap-1 justify-end">
+                      <TableCell className="w-[300px]">{stock.name}</TableCell>
+                      <TableCell className="w-[100px]">
+                        <div className="text-right pr-4">
+                          ${stock.price.toFixed(2)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-[110px]">
+                        <div className="flex items-center gap-1 justify-end pr-4">
                           {stock.changePercent > 0 ? (
                             <TrendingUp className="w-4 h-4 text-green-500" />
                           ) : (
@@ -460,12 +470,18 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="w-[120px] text-right px-2">
-                        <Badge variant={stock.analystRating >= 85 ? "default" : "secondary"}>
-                          {stock.analystRating}%
-                        </Badge>
+                      <TableCell className="w-[120px]">
+                        <div className="text-right pr-4">
+                          <Badge variant={stock.analystRating >= 85 ? "default" : "secondary"}>
+                            {stock.analystRating}%
+                          </Badge>
+                        </div>
                       </TableCell>
-                      <TableCell className="w-[100px] text-right px-2">{stock.volume.toLocaleString()}</TableCell>
+                      <TableCell className="w-[100px]">
+                        <div className="text-right pr-4">
+                          {stock.volume.toLocaleString()}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
