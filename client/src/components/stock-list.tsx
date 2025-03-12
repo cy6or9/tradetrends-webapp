@@ -368,35 +368,37 @@ export function StockList({ filters, setStocks }: StockListProps) {
         )}
         <div className="relative h-[600px]">
           <div className="absolute inset-0 overflow-auto">
-            <div className="min-w-[800px]">
+            <div className="relative min-w-[800px]">
               <Table>
-                <TableHeader className="[&_tr]:border-b">
-                  <TableRow className="sticky top-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
-                    <TableHead className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[120px] z-40">
+                <TableHeader>
+                  <TableRow className="sticky top-0 z-30 [&>th]:bg-background/95 [&>th]:backdrop-blur [&>th]:supports-[backdrop-filter]:bg-background/95">
+                    <TableHead
+                      className="sticky left-0 z-50 border-r border-border w-[120px]"
+                    >
                       <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-8 text-left font-medium w-full justify-between">
                         Symbol <ArrowUpDown className="h-4 w-4 ml-2" />
                       </Button>
                     </TableHead>
-                    <TableHead className="w-[300px] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+                    <TableHead className="w-[300px]">
                       <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
                         Name <ArrowUpDown className="h-4 w-4 ml-2" />
                       </Button>
                     </TableHead>
-                    <TableHead className="w-[100px] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+                    <TableHead className="w-[100px]">
                       <div className="text-right">
                         <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 font-medium px-0">
                           Price <ArrowUpDown className="h-4 w-4 ml-2" />
                         </Button>
                       </div>
                     </TableHead>
-                    <TableHead className="w-[110px] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+                    <TableHead className="w-[110px]">
                       <div className="text-right">
                         <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 font-medium px-0">
                           Change <ArrowUpDown className="h-4 w-4 ml-2" />
                         </Button>
                       </div>
                     </TableHead>
-                    <TableHead className="w-[120px] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+                    <TableHead className="w-[120px]">
                       <div className="flex items-center justify-end">
                         <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 font-medium px-0">
                           Rate <ArrowUpDown className="h-4 w-4 ml-2" />
@@ -411,7 +413,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         </Tooltip>
                       </div>
                     </TableHead>
-                    <TableHead className="w-[100px] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+                    <TableHead className="w-[100px]">
                       <div className="text-right">
                         <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 font-medium px-0">
                           Vol <ArrowUpDown className="h-4 w-4 ml-2" />
@@ -427,7 +429,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                     >
-                      <TableCell className="sticky left-0 bg-background font-medium w-[120px] z-20">
+                      <TableCell
+                        className="sticky left-0 bg-background border-r border-border w-[120px] z-30"
+                      >
                         <div className="flex items-center gap-2">
                           <Button
                             variant="ghost"
@@ -449,7 +453,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         </div>
                       </TableCell>
                       <TableCell className="w-[300px]">{stock.name}</TableCell>
-                      <TableCell className="w-[100px] text-right">${stock.price.toFixed(2)}</TableCell>
+                      <TableCell className="w-[100px] text-right">
+                        ${stock.price.toFixed(2)}
+                      </TableCell>
                       <TableCell className="w-[110px] text-right">
                         <div className="flex items-center justify-end gap-1">
                           {stock.changePercent > 0 ? (
@@ -467,7 +473,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           {stock.analystRating}%
                         </Badge>
                       </TableCell>
-                      <TableCell className="w-[100px] text-right">{stock.volume.toLocaleString()}</TableCell>
+                      <TableCell className="w-[100px] text-right">
+                        {stock.volume.toLocaleString()}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
