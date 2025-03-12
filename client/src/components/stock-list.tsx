@@ -95,8 +95,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
   useEffect(() => {
     async function loadFavorites() {
       try {
-        const cachedFavorites = await stockCache.getFavorites();
-        setFavorites(new Set(cachedFavorites.map(stock => stock.symbol)));
+        const favoriteStocks = await stockCache.getFavorites();
+        console.log('Loading favorites:', favoriteStocks.map(s => s.symbol));
+        setFavorites(new Set(favoriteStocks.map(stock => stock.symbol)));
       } catch (error) {
         console.error('Failed to load favorites:', error);
         setFavorites(new Set());
@@ -139,6 +140,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     if (filters.isFavorite) {
       try {
         const favoriteStocks = await stockCache.getFavorites();
+        console.log('Fetched favorite stocks:', favoriteStocks.length);
         return {
           stocks: favoriteStocks,
           hasMore: false,
@@ -158,16 +160,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
       try {
         const cachedStocks = await stockCache.getAllStocks();
         const hotStocks = cachedStocks
-          // First filter out stocks under $0.03
           .filter(stock => stock.price >= 0.03)
           .filter(stock =>
-            // Price change factor (40%)
             (Math.abs(stock.changePercent) * 4) +
-            // Volume factor (25%)
             ((stock.volume > 1000000 ? 100 : (stock.volume / 10000)) * 0.25) +
-            // Analyst rating factor (15%)
             (stock.analystRating * 0.15) +
-            // Additional factors (20% distributed)
             (stock.beta > 1 ? 10 : 0) +
             (stock.marketCap > 1000000000 ? 10 : 0) > 50
           )
@@ -217,7 +214,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
     try {
       if (!isOnline) {
-        // When offline, return cached data
         const cachedStocks = await stockCache.getAllStocks();
         const filteredStocks = cachedStocks.filter(stock => {
           if (filters.search) {
@@ -249,7 +245,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
       const data = await response.json();
 
       if (data.stocks?.length > 0) {
-        // Filter out stocks under $0.03 before updating cache
         data.stocks = data.stocks.filter(stock => stock.price >= 0.03);
         await stockCache.updateStocks(data.stocks);
       }
@@ -261,7 +256,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     } catch (error) {
       console.error('Error fetching stocks:', error);
 
-      // If error occurs, try to return cached data
       const cachedStocks = await stockCache.getAllStocks();
       return {
         stocks: cachedStocks,
@@ -350,11 +344,15 @@ export function StockList({ filters, setStocks }: StockListProps) {
         }
         return newFavorites;
       });
-      setForceUpdate(prev => prev + 1);
+
+      // Force a refresh if we're on the favorites view
+      if (filters.isFavorite) {
+        setForceUpdate(prev => prev + 1);
+      }
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
     }
-  }, []);
+  }, [filters.isFavorite]);
 
   if (isError) {
     return (
