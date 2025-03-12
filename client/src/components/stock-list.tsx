@@ -209,12 +209,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      // Store current favorites view state
-      const wasShowingFavorites = filters.isFavorite;
+      // Get current state from cache first
+      const favoriteStocks = await stockCache.getFavorites();
+      const isFavorite = favoriteStocks.some(stock => stock.symbol === symbol);
 
+      // Update local state to match cache
       setFavorites(prev => {
         const newFavorites = new Set(prev);
-        if (prev.has(symbol)) {
+        if (isFavorite) {
           newFavorites.delete(symbol);
         } else {
           newFavorites.add(symbol);
@@ -222,6 +224,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
 
+      // Store current favorites view state
+      const wasShowingFavorites = filters.isFavorite;
+
+      // Update cache
       await stockCache.toggleFavorite(symbol);
 
       // Invalidate and refetch while preserving favorites view state
@@ -231,9 +237,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
       if (wasShowingFavorites) {
         setForceUpdate(prev => prev + 1);
       }
-
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
+      // Revert UI state on error
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (newFavorites.has(symbol)) {
@@ -244,7 +250,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
     }
-  }, [filters, queryClient]);
+  }, [filters.isFavorite, queryClient]);
 
   const {
     data,
@@ -352,12 +358,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
           <div className="absolute inset-0 overflow-auto">
             <div className="min-w-[800px]">
               {/* Fixed header */}
-              <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+              <div className="sticky top-0 z-[60] bg-background border-b border-border">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead
-                        className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 border-r border-border w-[120px]"
+                        className="sticky left-0 z-[70] bg-background border-r border-border w-[120px]"
                       >
                         <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-12 text-left font-medium w-full justify-between">
                           Symbol <ArrowUpDown className="h-4 w-4" />
@@ -420,7 +426,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                       >
                         <TableCell
-                          className="sticky left-0 bg-background border-r border-border w-[120px]"
+                          className="sticky left-0 z-50 bg-background border-r border-border w-[120px]"
                         >
                           <div className="flex items-center gap-2">
                             <Button
