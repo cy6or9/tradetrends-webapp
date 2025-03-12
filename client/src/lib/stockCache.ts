@@ -56,7 +56,7 @@ const stockCacheSchema = z.object({
   analystRating: z.number(),
   lastUpdate: z.string(),
   nextUpdate: z.string(),
-  isFavorite: z.boolean().default(false)
+  isFavorite: z.boolean()
 });
 
 class StockDatabase extends Dexie {
@@ -94,7 +94,6 @@ class StockCache {
       const favorites = localStorage.getItem(this.FAVORITES_KEY);
       if (favorites) {
         this.favorites = new Set(JSON.parse(favorites));
-        console.log('Loaded favorites from storage:', Array.from(this.favorites));
       }
     } catch (error) {
       console.error('Failed to load favorites from storage:', error);
@@ -163,9 +162,7 @@ class StockCache {
   async getFavorites(): Promise<CachedStock[]> {
     try {
       const stocks = await this.db.stocks.toArray();
-      const favoriteStocks = stocks.filter(stock => this.favorites.has(stock.symbol));
-      console.log('Retrieved favorites:', favoriteStocks.length, 'stocks');
-      return favoriteStocks;
+      return stocks.filter(stock => this.favorites.has(stock.symbol));
     } catch (error) {
       console.error('Failed to get favorites:', error);
       return [];
@@ -187,9 +184,7 @@ class StockCache {
       }
 
       this.saveFavoritesToStorage();
-      const newStatus = this.favorites.has(symbol);
-      console.log(`Toggled favorite for ${symbol} to ${newStatus}`);
-      return newStatus;
+      return this.favorites.has(symbol);
     } catch (error) {
       console.error(`Failed to toggle favorite for ${symbol}:`, error);
       return false;

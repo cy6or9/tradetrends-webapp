@@ -96,7 +96,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     async function loadFavorites() {
       try {
         const favoriteStocks = await stockCache.getFavorites();
-        console.log('Loading favorites:', favoriteStocks.map(s => s.symbol));
         setFavorites(new Set(favoriteStocks.map(stock => stock.symbol)));
       } catch (error) {
         console.error('Failed to load favorites:', error);
@@ -138,22 +137,13 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const fetchStocks = async ({ pageParam = 1 }) => {
     if (filters.isFavorite) {
-      try {
-        const favoriteStocks = await stockCache.getFavorites();
-        console.log('Fetched favorite stocks:', favoriteStocks.length);
-        return {
-          stocks: favoriteStocks,
-          hasMore: false,
-          total: favoriteStocks.length
-        };
-      } catch (error) {
-        console.error('Failed to fetch favorites:', error);
-        return {
-          stocks: [],
-          hasMore: false,
-          total: 0
-        };
-      }
+      const allStocks = await stockCache.getAllStocks();
+      const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
+      return {
+        stocks: favoriteStocks,
+        hasMore: false,
+        total: favoriteStocks.length
+      };
     }
 
     if (filters.isHotStock) {
@@ -334,23 +324,36 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      const newStatus = await stockCache.toggleFavorite(symbol);
+      // Optimistically update UI
       setFavorites(prev => {
         const newFavorites = new Set(prev);
-        if (newStatus) {
-          newFavorites.add(symbol);
-        } else {
+        if (prev.has(symbol)) {
           newFavorites.delete(symbol);
+        } else {
+          newFavorites.add(symbol);
         }
         return newFavorites;
       });
 
-      // Force a refresh if we're on the favorites view
+      // Persist change in background
+      await stockCache.toggleFavorite(symbol);
+
+      // If we're on favorites view, trigger a refresh
       if (filters.isFavorite) {
         setForceUpdate(prev => prev + 1);
       }
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
+      // Revert UI on error
+      setFavorites(prev => {
+        const newFavorites = new Set(prev);
+        if (newFavorites.has(symbol)) {
+          newFavorites.delete(symbol);
+        } else {
+          newFavorites.add(symbol);
+        }
+        return newFavorites;
+      });
     }
   }, [filters.isFavorite]);
 
