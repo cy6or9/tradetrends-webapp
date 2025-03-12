@@ -6,7 +6,7 @@ export function NavigationBar() {
   return (
     <div className="w-full bg-background border-b border-border">
       <div className="container flex items-center justify-between h-12">
-        {/* Left side: Status and future pages */}
+        {/* Left side: Live status and future pages */}
         <div className="flex items-center gap-4">
           <Badge variant="outline" className="bg-green-500/10 text-green-500">
             Live

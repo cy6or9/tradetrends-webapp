@@ -17,27 +17,29 @@ export function MarketTabs({ activeTab, trackedStocks }: MarketTabsProps) {
   ];
 
   return (
-    <div className="container flex items-center justify-between py-4">
-      <nav className="flex items-center gap-4">
-        {tabs.map((tab) => (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            className={cn(
-              "px-3 py-1.5 text-sm font-medium transition-colors",
-              location === tab.href
-                ? "text-primary"
-                : "text-muted-foreground hover:text-primary"
-            )}
-          >
-            {tab.name}
-          </Link>
-        ))}
-      </nav>
+    <div className="border-b border-border">
+      <div className="container flex items-center justify-between py-4">
+        <nav className="flex items-center gap-4">
+          {tabs.map((tab) => (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={cn(
+                "px-3 py-1.5 text-sm font-medium transition-colors",
+                location === tab.href
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-primary"
+              )}
+            >
+              {tab.name}
+            </Link>
+          ))}
+        </nav>
 
-      <Badge variant="secondary" className="ml-auto">
-        {trackedStocks} stocks tracked
-      </Badge>
+        <Badge variant="outline" className="bg-green-500/10 text-green-500">
+          {trackedStocks} stocks tracked
+        </Badge>
+      </div>
     </div>
   );
 }
