@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Star, TrendingUp, TrendingDown, ArrowUpDown, Info } from "lucide-react";
+import { Star, TrendingUp, TrendingDown, ArrowUpDown, Info, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { stockCache } from "@/lib/stockCache";
@@ -90,10 +90,19 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
-    const cachedFavorites = stockCache.getFavorites();
-    setFavorites(new Set(cachedFavorites.map(stock => stock.symbol)));
+    async function loadFavorites() {
+      try {
+        const cachedFavorites = await stockCache.getFavorites();
+        setFavorites(new Set(cachedFavorites.map(stock => stock.symbol)));
+      } catch (error) {
+        console.error('Failed to load favorites:', error);
+        setFavorites(new Set());
+      }
+    }
+    loadFavorites();
   }, []);
 
   const handleSort = useCallback((key: string) => {
@@ -113,9 +122,22 @@ export function StockList({ filters, setStocks }: StockListProps) {
     };
   }, []);
 
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const fetchStocks = async ({ pageParam = 1 }) => {
     if (filters.isFavorite) {
-      const favoriteStocks = stockCache.getFavorites();
+      const favoriteStocks = await stockCache.getFavorites();
       return {
         stocks: favoriteStocks,
         hasMore: false,
@@ -124,7 +146,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }
 
     if (filters.isHotStock) {
-      const cachedStocks = stockCache.getAllStocks();
+      const cachedStocks = await stockCache.getAllStocks();
       const hotStocks = cachedStocks
         // First filter out stocks under $0.03
         .filter(stock => stock.price >= 0.03)
@@ -176,6 +198,34 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }
 
     try {
+      if (!isOnline) {
+        // When offline, return cached data
+        const cachedStocks = await stockCache.getAllStocks();
+        const filteredStocks = cachedStocks.filter(stock => {
+          if (filters.search) {
+            return stock.symbol.includes(filters.search.toUpperCase()) ||
+                   stock.name.toUpperCase().includes(filters.search.toUpperCase());
+          }
+          if (filters.industry && filters.industry !== 'Any') {
+            return stock.industry === filters.industry;
+          }
+          if (filters.exchange && filters.exchange !== 'Any') {
+            return stock.exchange === filters.exchange;
+          }
+          return true;
+        });
+
+        const start = (pageParam - 1) * 50;
+        const end = start + 50;
+        const paginatedStocks = filteredStocks.slice(start, end);
+
+        return {
+          stocks: paginatedStocks,
+          hasMore: end < filteredStocks.length,
+          total: filteredStocks.length
+        };
+      }
+
       const response = await fetch(`/api/stocks/search?${searchParams}`);
       if (!response.ok) throw new Error('Failed to fetch stocks');
       const data = await response.json();
@@ -183,7 +233,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
       if (data.stocks?.length > 0) {
         // Filter out stocks under $0.03 before updating cache
         data.stocks = data.stocks.filter(stock => stock.price >= 0.03);
-        stockCache.updateStocks(data.stocks);
+        await stockCache.updateStocks(data.stocks);
       }
 
       return {
@@ -192,7 +242,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
       };
     } catch (error) {
       console.error('Error fetching stocks:', error);
-      throw error;
+
+      // If error occurs, try to return cached data
+      const cachedStocks = await stockCache.getAllStocks();
+      return {
+        stocks: cachedStocks,
+        hasMore: false,
+        total: cachedStocks.length
+      };
     }
   };
 
@@ -263,18 +320,22 @@ export function StockList({ filters, setStocks }: StockListProps) {
     setStocks?.(sortedStocks);
   }, [sortedStocks, setStocks]);
 
-  const handleToggleFavorite = useCallback((symbol: string) => {
-    const newStatus = stockCache.toggleFavorite(symbol);
-    setFavorites(prev => {
-      const newFavorites = new Set(prev);
-      if (newStatus) {
-        newFavorites.add(symbol);
-      } else {
-        newFavorites.delete(symbol);
-      }
-      return newFavorites;
-    });
-    setForceUpdate(prev => prev + 1);
+  const handleToggleFavorite = useCallback(async (symbol: string) => {
+    try {
+      const newStatus = await stockCache.toggleFavorite(symbol);
+      setFavorites(prev => {
+        const newFavorites = new Set(prev);
+        if (newStatus) {
+          newFavorites.add(symbol);
+        } else {
+          newFavorites.delete(symbol);
+        }
+        return newFavorites;
+      });
+      setForceUpdate(prev => prev + 1);
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error);
+    }
   }, []);
 
   if (isError) {
@@ -300,6 +361,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
   return (
     <TooltipProvider>
       <Card>
+        {!isOnline && (
+          <div className="p-2 bg-yellow-500/10 border-b flex items-center justify-center gap-2 text-yellow-500">
+            <WifiOff className="h-4 w-4" />
+            <span className="text-sm">Offline mode - viewing cached data</span>
+          </div>
+        )}
         {!isTabActive && (
           <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-50">
             <p className="text-sm text-muted-foreground">Tab inactive - Resume viewing to update</p>
