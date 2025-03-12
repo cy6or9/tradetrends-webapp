@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Star, TrendingUp, TrendingDown, ArrowUpDown, Info, Wifi, WifiOff } from "lucide-react";
+import { Star, TrendingUp, TrendingDown, ArrowUpDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { stockCache } from "@/lib/stockCache";
@@ -91,7 +91,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
     async function loadFavorites() {
@@ -123,36 +122,14 @@ export function StockList({ filters, setStocks }: StockListProps) {
     };
   }, []);
 
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
   const fetchStocks = async ({ pageParam = 1 }) => {
     if (filters.isFavorite) {
-      try {
-        const favoriteStocks = await stockCache.getFavorites();
-        return {
-          stocks: favoriteStocks,
-          hasMore: false,
-          total: favoriteStocks.length
-        };
-      } catch (error) {
-        console.error('Failed to fetch favorites:', error);
-        return {
-          stocks: [],
-          hasMore: false,
-          total: 0
-        };
-      }
+      const favoriteStocks = await stockCache.getFavorites();
+      return {
+        stocks: favoriteStocks,
+        hasMore: false,
+        total: favoriteStocks.length
+      };
     }
 
     if (filters.isHotStock) {
@@ -169,11 +146,11 @@ export function StockList({ filters, setStocks }: StockListProps) {
           )
           .sort((a, b) => {
             const aScore = (Math.abs(a.changePercent) * 4) +
-                          ((a.volume > 1000000 ? 100 : (a.volume / 10000)) * 0.25) +
-                          (a.analystRating * 0.15);
+              ((a.volume > 1000000 ? 100 : (a.volume / 10000)) * 0.25) +
+              (a.analystRating * 0.15);
             const bScore = (Math.abs(b.changePercent) * 4) +
-                          ((b.volume > 1000000 ? 100 : (b.volume / 10000)) * 0.25) +
-                          (b.analystRating * 0.15);
+              ((b.volume > 1000000 ? 100 : (b.volume / 10000)) * 0.25) +
+              (b.analystRating * 0.15);
             return bScore - aScore;
           });
 
@@ -212,33 +189,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
     }
 
     try {
-      if (!isOnline) {
-        const cachedStocks = await stockCache.getAllStocks();
-        const filteredStocks = cachedStocks.filter(stock => {
-          if (filters.search) {
-            return stock.symbol.includes(filters.search.toUpperCase()) ||
-                   stock.name.toUpperCase().includes(filters.search.toUpperCase());
-          }
-          if (filters.industry && filters.industry !== 'Any') {
-            return stock.industry === filters.industry;
-          }
-          if (filters.exchange && filters.exchange !== 'Any') {
-            return stock.exchange === filters.exchange;
-          }
-          return true;
-        });
-
-        const start = (pageParam - 1) * 50;
-        const end = start + 50;
-        const paginatedStocks = filteredStocks.slice(start, end);
-
-        return {
-          stocks: paginatedStocks,
-          hasMore: end < filteredStocks.length,
-          total: filteredStocks.length
-        };
-      }
-
       const response = await fetch(`/api/stocks/search?${searchParams}`);
       if (!response.ok) throw new Error('Failed to fetch stocks');
       const data = await response.json();
@@ -254,7 +204,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
       };
     } catch (error) {
       console.error('Error fetching stocks:', error);
-
       const cachedStocks = await stockCache.getAllStocks();
       return {
         stocks: cachedStocks,
@@ -333,7 +282,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      // Update UI state immediately
+      // Update local state immediately
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (prev.has(symbol)) {
@@ -344,22 +293,22 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
 
-      // If we're on favorites view, update the query cache immediately
-      if (filters.isFavorite) {
-        const currentStock = allStocks.find(s => s.symbol === symbol);
-        if (!currentStock) return;
+      // Find the stock in current data
+      const stock = allStocks.find(s => s.symbol === symbol);
+      if (!stock) return;
 
+      // Update IndexedDB and localStorage
+      await stockCache.toggleFavorite(symbol);
+
+      // If we're on favorites view, update the query data immediately
+      if (filters.isFavorite) {
+        const updatedStock = { ...stock, isFavorite: !favorites.has(symbol) };
         const queryData = queryClient.getQueryData(["/api/stocks", filters, forceUpdate]) as any;
         const currentStocks = queryData?.pages?.[0]?.stocks || [];
 
-        let newStocks;
-        if (favorites.has(symbol)) {
-          // Remove from favorites
-          newStocks = currentStocks.filter((s: any) => s.symbol !== symbol);
-        } else {
-          // Add to favorites
-          newStocks = [...currentStocks, { ...currentStock, isFavorite: true }];
-        }
+        const newStocks = favorites.has(symbol)
+          ? currentStocks.filter((s: any) => s.symbol !== symbol)
+          : [...currentStocks, updatedStock];
 
         queryClient.setQueryData(
           ["/api/stocks", filters, forceUpdate],
@@ -373,10 +322,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
           }
         );
       }
-
-      // Persist change in background
-      await stockCache.toggleFavorite(symbol);
-
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
       // Revert UI state on error
@@ -404,7 +349,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     return <LoadingSpinner />;
   }
 
-  if (!allStocks.length) {
+  if (!sortedStocks.length) {
     return (
       <div className="p-8 text-center text-muted-foreground">
         {filters.isFavorite ? "No favorite stocks yet." : "No stocks found matching your criteria."}
@@ -438,22 +383,22 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           Symbol <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead className="w-[200px]">
+                      <TableHead className="w-[250px]">
                         <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 text-left font-medium w-full justify-between">
                           Name <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead className="w-[100px]">
+                      <TableHead className="w-[100px] text-right">
                         <Button variant="ghost" onClick={() => handleSort('price')} className="h-8 text-right font-medium w-full justify-between">
                           Price <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead className="w-[110px]">
+                      <TableHead className="w-[110px] text-right">
                         <Button variant="ghost" onClick={() => handleSort('changePercent')} className="h-8 text-right font-medium w-full justify-between">
                           Change <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead className="w-[120px]">
+                      <TableHead className="w-[120px] text-right">
                         <div className="flex items-center gap-1 justify-end">
                           <Button variant="ghost" onClick={() => handleSort('analystRating')} className="h-8 text-right font-medium justify-between">
                             Rate <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -468,7 +413,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           </Tooltip>
                         </div>
                       </TableHead>
-                      <TableHead className="w-[100px]">
+                      <TableHead className="w-[100px] text-right">
                         <Button variant="ghost" onClick={() => handleSort('volume')} className="h-8 text-right font-medium w-full justify-between">
                           Vol <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
@@ -485,7 +430,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                     >
-                      <TableCell className="sticky left-0 bg-background font-medium">
+                      <TableCell className="sticky left-0 bg-background font-medium w-[120px]">
                         <div className="flex items-center gap-2">
                           <Button
                             variant="ghost"
@@ -506,9 +451,9 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           {stock.symbol}
                         </div>
                       </TableCell>
-                      <TableCell>{stock.name}</TableCell>
-                      <TableCell className="text-right">${stock.price.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="w-[250px]">{stock.name}</TableCell>
+                      <TableCell className="w-[100px] text-right">${stock.price.toFixed(2)}</TableCell>
+                      <TableCell className="w-[110px] text-right">
                         <div className="flex items-center gap-1 justify-end">
                           {stock.changePercent > 0 ? (
                             <TrendingUp className="w-4 h-4 text-green-500" />
@@ -520,12 +465,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="w-[120px] text-right">
                         <Badge variant={stock.analystRating >= 85 ? "default" : "secondary"}>
                           {stock.analystRating}%
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">{stock.volume.toLocaleString()}</TableCell>
+                      <TableCell className="w-[100px] text-right">{stock.volume.toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
