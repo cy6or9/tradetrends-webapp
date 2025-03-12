@@ -297,10 +297,10 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
 
-      // Update backend
+      // Update storage
       await stockCache.toggleFavorite(symbol);
 
-      // If we're on favorites view, update immediately
+      // If we're on favorites view, refresh the data immediately
       if (filters.isFavorite) {
         const favoriteStocks = await stockCache.getFavorites();
         queryClient.setQueryData(
