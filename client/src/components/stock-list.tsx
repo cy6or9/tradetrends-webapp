@@ -96,8 +96,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
   useEffect(() => {
     async function loadFavorites() {
       try {
-        const allStocks = await stockCache.getAllStocks();
-        const favoriteStocks = allStocks.filter(stock => stock.isFavorite);
+        const favoriteStocks = await stockCache.getFavorites();
         setFavorites(new Set(favoriteStocks.map(stock => stock.symbol)));
       } catch (error) {
         console.error('Failed to load favorites:', error);
@@ -105,13 +104,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
       }
     }
     loadFavorites();
-  }, []);
-
-  const handleSort = useCallback((key: string) => {
-    setSort(current => ({
-      key,
-      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
-    }));
   }, []);
 
   useEffect(() => {
@@ -137,51 +129,49 @@ export function StockList({ filters, setStocks }: StockListProps) {
     };
   }, []);
 
+  const handleSort = useCallback((key: string) => {
+    setSort(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  }, []);
+
   const fetchStocks = async ({ pageParam = 1 }) => {
     try {
-      const allStocks = await stockCache.getAllStocks();
-      let filteredStocks = allStocks;
-
       if (filters.isFavorite) {
-        filteredStocks = allStocks.filter(stock => favorites.has(stock.symbol));
-        console.log('Filtered favorite stocks:', filteredStocks.length);
+        const favoriteStocks = await stockCache.getFavorites();
         return {
-          stocks: filteredStocks,
+          stocks: favoriteStocks,
           hasMore: false,
-          total: filteredStocks.length
+          total: favoriteStocks.length
         };
       }
 
-      if (filters.isHotStock) {
-        filteredStocks = allStocks
-          .filter(stock => stock.price >= 0.03)
-          .filter(stock =>
-            (Math.abs(stock.changePercent) * 4) +
-            ((stock.volume > 1000000 ? 100 : (stock.volume / 10000)) * 0.25) +
-            (stock.analystRating * 0.15) +
-            (stock.beta > 1 ? 10 : 0) +
-            (stock.marketCap > 1000000000 ? 10 : 0) > 50
-          )
-          .sort((a, b) => {
-            const aScore = (Math.abs(a.changePercent) * 4) +
-                          ((a.volume > 1000000 ? 100 : (a.volume / 10000)) * 0.25) +
-                          (a.analystRating * 0.15);
-            const bScore = (Math.abs(b.changePercent) * 4) +
-                          ((b.volume > 1000000 ? 100 : (b.volume / 10000)) * 0.25) +
-                          (b.analystRating * 0.15);
-            return bScore - aScore;
-          });
+      const searchParams = new URLSearchParams({
+        page: pageParam.toString(),
+        limit: '50',
+      });
 
-        return {
-          stocks: filteredStocks,
-          hasMore: false,
-          total: filteredStocks.length
-        };
+      if (filters.search) {
+        searchParams.append('search', filters.search.toUpperCase());
+      } else {
+        if (filters.tradingApp && filters.tradingApp !== 'Any') {
+          searchParams.append('tradingApp', filters.tradingApp);
+        }
+        if (filters.industry && filters.industry !== 'Any') {
+          searchParams.append('industry', filters.industry);
+        }
+        if (filters.exchange && filters.exchange !== 'Any') {
+          searchParams.append('exchange', filters.exchange);
+        }
       }
 
       if (!isOnline) {
+        const allStocks = await stockCache.getAllStocks();
+        let filteredStocks = allStocks;
+
         if (filters.search) {
-          filteredStocks = allStocks.filter(stock =>
+          filteredStocks = filteredStocks.filter(stock =>
             stock.symbol.includes(filters.search!.toUpperCase()) ||
             stock.name.toUpperCase().includes(filters.search!.toUpperCase())
           );
@@ -204,25 +194,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
           hasMore: end < filteredStocks.length,
           total: filteredStocks.length
         };
-      }
-
-      const searchParams = new URLSearchParams({
-        page: pageParam.toString(),
-        limit: '50',
-      });
-
-      if (filters.search) {
-        searchParams.append('search', filters.search.toUpperCase());
-      } else {
-        if (filters.tradingApp && filters.tradingApp !== 'Any') {
-          searchParams.append('tradingApp', filters.tradingApp);
-        }
-        if (filters.industry && filters.industry !== 'Any') {
-          searchParams.append('industry', filters.industry);
-        }
-        if (filters.exchange && filters.exchange !== 'Any') {
-          searchParams.append('exchange', filters.exchange);
-        }
       }
 
       const response = await fetch(`/api/stocks/search?${searchParams}`);
@@ -315,7 +286,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      // Update UI state immediately
+      // Update UI immediately
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (prev.has(symbol)) {
@@ -326,13 +297,12 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
 
-      // Update storage
+      // Update backend
       await stockCache.toggleFavorite(symbol);
 
-      // If we're on favorites view, update the query data immediately
+      // If we're on favorites view, update immediately
       if (filters.isFavorite) {
-        const allStocks = await stockCache.getAllStocks();
-        const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
+        const favoriteStocks = await stockCache.getFavorites();
         queryClient.setQueryData(
           ["/api/stocks", filters, forceUpdate],
           { pages: [{ stocks: favoriteStocks, hasMore: false, total: favoriteStocks.length }] }
@@ -340,7 +310,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
       }
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
-      // Revert UI state on error
+      // Revert UI on error
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (newFavorites.has(symbol)) {
@@ -351,7 +321,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
     }
-  }, [filters.isFavorite, favorites, queryClient]);
+  }, [filters.isFavorite, queryClient]);
 
   if (isError) {
     return (

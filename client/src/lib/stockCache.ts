@@ -61,25 +61,23 @@ const stockCacheSchema = z.object({
 
 class StockDatabase extends Dexie {
   stocks!: Dexie.Table<CachedStock, string>;
+  favorites!: Dexie.Table<{ symbol: string }, string>;
 
   constructor() {
     super('StockDatabase');
     this.version(1).stores({
-      stocks: 'symbol'
+      stocks: 'symbol',
+      favorites: 'symbol'
     });
   }
 }
 
 class StockCache {
-  private readonly FAVORITES_KEY = 'tradetrends_favorites';
   private readonly db: StockDatabase;
   private static instance: StockCache;
-  private favorites: Set<string>;
 
   private constructor() {
     this.db = new StockDatabase();
-    this.favorites = new Set();
-    this.loadFavoritesFromStorage();
   }
 
   static getInstance(): StockCache {
@@ -89,31 +87,12 @@ class StockCache {
     return StockCache.instance;
   }
 
-  private loadFavoritesFromStorage(): void {
-    try {
-      const favorites = localStorage.getItem(this.FAVORITES_KEY);
-      if (favorites) {
-        this.favorites = new Set(JSON.parse(favorites));
-      }
-    } catch (error) {
-      console.error('Failed to load favorites from storage:', error);
-      this.favorites = new Set();
-    }
-  }
-
-  private saveFavoritesToStorage(): void {
-    try {
-      localStorage.setItem(this.FAVORITES_KEY, JSON.stringify(Array.from(this.favorites)));
-    } catch (error) {
-      console.error('Failed to save favorites to storage:', error);
-    }
-  }
-
   async updateStock(stock: CachedStock): Promise<void> {
     try {
+      const isFavorite = await this.db.favorites.get(stock.symbol) !== undefined;
       const validatedData = stockCacheSchema.parse({
         ...stock,
-        isFavorite: this.favorites.has(stock.symbol)
+        isFavorite
       });
       await this.db.stocks.put(validatedData);
     } catch (error) {
@@ -123,10 +102,14 @@ class StockCache {
 
   async updateStocks(stocks: CachedStock[]): Promise<void> {
     try {
+      const favorites = await this.db.favorites.toArray();
+      const favoriteSet = new Set(favorites.map(f => f.symbol));
+
       const validatedStocks = stocks.map(stock => ({
         ...stock,
-        isFavorite: this.favorites.has(stock.symbol)
+        isFavorite: favoriteSet.has(stock.symbol)
       }));
+
       await this.db.stocks.bulkPut(validatedStocks);
     } catch (error) {
       console.error('Failed to update stocks:', error);
@@ -137,10 +120,8 @@ class StockCache {
     try {
       const stock = await this.db.stocks.get(symbol);
       if (stock) {
-        return {
-          ...stock,
-          isFavorite: this.favorites.has(symbol)
-        };
+        const isFavorite = await this.db.favorites.get(symbol) !== undefined;
+        return { ...stock, isFavorite };
       }
       return null;
     } catch (error) {
@@ -152,9 +133,12 @@ class StockCache {
   async getAllStocks(): Promise<CachedStock[]> {
     try {
       const stocks = await this.db.stocks.toArray();
+      const favorites = await this.db.favorites.toArray();
+      const favoriteSet = new Set(favorites.map(f => f.symbol));
+
       return stocks.map(stock => ({
         ...stock,
-        isFavorite: this.favorites.has(stock.symbol)
+        isFavorite: favoriteSet.has(stock.symbol)
       }));
     } catch (error) {
       console.error('Failed to get all stocks:', error);
@@ -164,13 +148,12 @@ class StockCache {
 
   async getFavorites(): Promise<CachedStock[]> {
     try {
+      const favorites = await this.db.favorites.toArray();
+      const favoriteSymbols = new Set(favorites.map(f => f.symbol));
       const stocks = await this.db.stocks.toArray();
       return stocks
-        .filter(stock => this.favorites.has(stock.symbol))
-        .map(stock => ({
-          ...stock,
-          isFavorite: true
-        }));
+        .filter(stock => favoriteSymbols.has(stock.symbol))
+        .map(stock => ({ ...stock, isFavorite: true }));
     } catch (error) {
       console.error('Failed to get favorites:', error);
       return [];
@@ -185,19 +168,17 @@ class StockCache {
         return false;
       }
 
-      if (this.favorites.has(symbol)) {
-        this.favorites.delete(symbol);
+      const existingFavorite = await this.db.favorites.get(symbol);
+      if (existingFavorite) {
+        await this.db.favorites.delete(symbol);
       } else {
-        this.favorites.add(symbol);
+        await this.db.favorites.put({ symbol });
       }
 
-      await this.db.stocks.put({
-        ...stock,
-        isFavorite: this.favorites.has(symbol)
-      });
+      const newStatus = !existingFavorite;
+      await this.db.stocks.update(symbol, { isFavorite: newStatus });
 
-      this.saveFavoritesToStorage();
-      return this.favorites.has(symbol);
+      return newStatus;
     } catch (error) {
       console.error(`Failed to toggle favorite for ${symbol}:`, error);
       return false;
@@ -206,10 +187,11 @@ class StockCache {
 
   async clear(): Promise<void> {
     try {
-      const favoriteStocks = await this.getFavorites();
+      const favorites = await this.db.favorites.toArray();
       await this.db.stocks.clear();
-      if (favoriteStocks.length > 0) {
-        await this.updateStocks(favoriteStocks);
+      await this.db.favorites.clear();
+      if (favorites.length > 0) {
+        await this.db.favorites.bulkPut(favorites);
       }
     } catch (error) {
       console.error('Failed to clear cache:', error);
