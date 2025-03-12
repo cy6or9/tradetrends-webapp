@@ -137,45 +137,63 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const fetchStocks = async ({ pageParam = 1 }) => {
     if (filters.isFavorite) {
-      const favoriteStocks = await stockCache.getFavorites();
-      return {
-        stocks: favoriteStocks,
-        hasMore: false,
-        total: favoriteStocks.length
-      };
+      try {
+        const favoriteStocks = await stockCache.getFavorites();
+        return {
+          stocks: favoriteStocks,
+          hasMore: false,
+          total: favoriteStocks.length
+        };
+      } catch (error) {
+        console.error('Failed to fetch favorites:', error);
+        return {
+          stocks: [],
+          hasMore: false,
+          total: 0
+        };
+      }
     }
 
     if (filters.isHotStock) {
-      const cachedStocks = await stockCache.getAllStocks();
-      const hotStocks = cachedStocks
-        // First filter out stocks under $0.03
-        .filter(stock => stock.price >= 0.03)
-        .filter(stock =>
-          // Price change factor (40%)
-          (Math.abs(stock.changePercent) * 4) +
-          // Volume factor (25%)
-          ((stock.volume > 1000000 ? 100 : (stock.volume / 10000)) * 0.25) +
-          // Analyst rating factor (15%)
-          (stock.analystRating * 0.15) +
-          // Additional factors (20% distributed)
-          (stock.beta > 1 ? 10 : 0) +
-          (stock.marketCap > 1000000000 ? 10 : 0) > 50
-        )
-        .sort((a, b) => {
-          const aScore = (Math.abs(a.changePercent) * 4) +
-                        ((a.volume > 1000000 ? 100 : (a.volume / 10000)) * 0.25) +
-                        (a.analystRating * 0.15);
-          const bScore = (Math.abs(b.changePercent) * 4) +
-                        ((b.volume > 1000000 ? 100 : (b.volume / 10000)) * 0.25) +
-                        (b.analystRating * 0.15);
-          return bScore - aScore;
-        });
+      try {
+        const cachedStocks = await stockCache.getAllStocks();
+        const hotStocks = cachedStocks
+          // First filter out stocks under $0.03
+          .filter(stock => stock.price >= 0.03)
+          .filter(stock =>
+            // Price change factor (40%)
+            (Math.abs(stock.changePercent) * 4) +
+            // Volume factor (25%)
+            ((stock.volume > 1000000 ? 100 : (stock.volume / 10000)) * 0.25) +
+            // Analyst rating factor (15%)
+            (stock.analystRating * 0.15) +
+            // Additional factors (20% distributed)
+            (stock.beta > 1 ? 10 : 0) +
+            (stock.marketCap > 1000000000 ? 10 : 0) > 50
+          )
+          .sort((a, b) => {
+            const aScore = (Math.abs(a.changePercent) * 4) +
+                          ((a.volume > 1000000 ? 100 : (a.volume / 10000)) * 0.25) +
+                          (a.analystRating * 0.15);
+            const bScore = (Math.abs(b.changePercent) * 4) +
+                          ((b.volume > 1000000 ? 100 : (b.volume / 10000)) * 0.25) +
+                          (b.analystRating * 0.15);
+            return bScore - aScore;
+          });
 
-      return {
-        stocks: hotStocks,
-        hasMore: false,
-        total: hotStocks.length
-      };
+        return {
+          stocks: hotStocks,
+          hasMore: false,
+          total: hotStocks.length
+        };
+      } catch (error) {
+        console.error('Failed to fetch hot stocks:', error);
+        return {
+          stocks: [],
+          hasMore: false,
+          total: 0
+        };
+      }
     }
 
     const searchParams = new URLSearchParams({

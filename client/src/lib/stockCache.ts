@@ -60,12 +60,12 @@ const stockCacheSchema = z.object({
 });
 
 class StockDatabase extends Dexie {
-  stocks: Dexie.Table<CachedStock, string>;
+  stocks!: Dexie.Table<CachedStock, string>;
 
   constructor() {
     super('StockDatabase');
     this.version(1).stores({
-      stocks: 'symbol,name,price,changePercent,volume,marketCap,beta,exchange,industry,analystRating,lastUpdate,nextUpdate,isFavorite'
+      stocks: 'symbol,name,price,changePercent,volume,marketCap,beta,exchange,industry,analystRating,lastUpdate,nextUpdate,*isFavorite'
     });
   }
 }
@@ -118,6 +118,11 @@ class StockCache {
   async updateStock(stock: CachedStock): Promise<void> {
     try {
       const validatedData = stockCacheSchema.parse(stock);
+      const existingStock = await this.db.stocks.get(stock.symbol);
+      if (existingStock) {
+        // Preserve favorite status when updating
+        validatedData.isFavorite = existingStock.isFavorite;
+      }
       await this.db.stocks.put(validatedData);
     } catch (error) {
       console.error(`Failed to update stock ${stock.symbol}:`, error);
@@ -126,7 +131,16 @@ class StockCache {
 
   async updateStocks(stocks: CachedStock[]): Promise<void> {
     try {
-      const validatedStocks = stocks.map(stock => stockCacheSchema.parse(stock));
+      const existingStocks = await this.db.stocks.bulkGet(stocks.map(s => s.symbol));
+      const validatedStocks = stocks.map((stock, index) => {
+        const existingStock = existingStocks[index];
+        const validatedData = stockCacheSchema.parse(stock);
+        if (existingStock) {
+          // Preserve favorite status when updating
+          validatedData.isFavorite = existingStock.isFavorite;
+        }
+        return validatedData;
+      });
       await this.db.stocks.bulkPut(validatedStocks);
     } catch (error) {
       console.error('Failed to update stocks:', error);
