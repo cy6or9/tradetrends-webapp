@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -81,6 +81,7 @@ interface StockListProps {
 }
 
 export function StockList({ filters, setStocks }: StockListProps) {
+  const queryClient = useQueryClient();
   const [sort, setSort] = useState<{
     key: string;
     direction: 'asc' | 'desc';
@@ -96,6 +97,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
     async function loadFavorites() {
       try {
         const favoriteStocks = await stockCache.getFavorites();
+        console.log('Initial favorites loaded:', favoriteStocks.length);
         setFavorites(new Set(favoriteStocks.map(stock => stock.symbol)));
       } catch (error) {
         console.error('Failed to load favorites:', error);
@@ -137,13 +139,23 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const fetchStocks = async ({ pageParam = 1 }) => {
     if (filters.isFavorite) {
-      const allStocks = await stockCache.getAllStocks();
-      const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
-      return {
-        stocks: favoriteStocks,
-        hasMore: false,
-        total: favoriteStocks.length
-      };
+      try {
+        const allStocks = await stockCache.getAllStocks();
+        const favoriteStocks = allStocks.filter(stock => favorites.has(stock.symbol));
+        console.log('Fetching favorites:', favoriteStocks.length);
+        return {
+          stocks: favoriteStocks,
+          hasMore: false,
+          total: favoriteStocks.length
+        };
+      } catch (error) {
+        console.error('Failed to fetch favorites:', error);
+        return {
+          stocks: [],
+          hasMore: false,
+          total: 0
+        };
+      }
     }
 
     if (filters.isHotStock) {
@@ -324,7 +336,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      // Optimistically update UI
+      // Update UI immediately
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (prev.has(symbol)) {
@@ -338,13 +350,20 @@ export function StockList({ filters, setStocks }: StockListProps) {
       // Persist change in background
       await stockCache.toggleFavorite(symbol);
 
-      // If we're on favorites view, trigger a refresh
+      // If we're on favorites view, refresh the data immediately
       if (filters.isFavorite) {
-        setForceUpdate(prev => prev + 1);
+        const allStocks = await stockCache.getAllStocks();
+        const favoriteStocks = allStocks.filter(stock => 
+          favorites.has(stock.symbol) || stock.symbol === symbol
+        );
+        queryClient.setQueryData(
+          ["/api/stocks", filters, forceUpdate],
+          { pages: [{ stocks: favoriteStocks, hasMore: false, total: favoriteStocks.length }] }
+        );
       }
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
-      // Revert UI on error
+      // Revert UI state on error
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (newFavorites.has(symbol)) {
@@ -355,7 +374,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
     }
-  }, [filters.isFavorite]);
+  }, [filters.isFavorite, favorites, queryClient]);
 
   if (isError) {
     return (

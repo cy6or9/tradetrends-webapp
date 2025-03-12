@@ -56,7 +56,7 @@ const stockCacheSchema = z.object({
   analystRating: z.number(),
   lastUpdate: z.string(),
   nextUpdate: z.string(),
-  isFavorite: z.boolean()
+  isFavorite: z.boolean().default(false)
 });
 
 class StockDatabase extends Dexie {
@@ -65,7 +65,7 @@ class StockDatabase extends Dexie {
   constructor() {
     super('StockDatabase');
     this.version(1).stores({
-      stocks: 'symbol' // Keep it simple - just index by symbol
+      stocks: 'symbol'
     });
   }
 }
@@ -111,6 +111,7 @@ class StockCache {
 
   async updateStock(stock: CachedStock): Promise<void> {
     try {
+      // Always set isFavorite based on the favorites Set
       const validatedData = stockCacheSchema.parse({
         ...stock,
         isFavorite: this.favorites.has(stock.symbol)
@@ -162,7 +163,11 @@ class StockCache {
   async getFavorites(): Promise<CachedStock[]> {
     try {
       const stocks = await this.db.stocks.toArray();
-      return stocks.filter(stock => this.favorites.has(stock.symbol));
+      return stocks.filter(stock => this.favorites.has(stock.symbol))
+        .map(stock => ({
+          ...stock,
+          isFavorite: true
+        }));
     } catch (error) {
       console.error('Failed to get favorites:', error);
       return [];
@@ -177,13 +182,20 @@ class StockCache {
         return false;
       }
 
+      // Toggle favorite status in memory
       if (this.favorites.has(symbol)) {
         this.favorites.delete(symbol);
       } else {
         this.favorites.add(symbol);
       }
 
+      // Update database and localStorage
+      await this.db.stocks.put({
+        ...stock,
+        isFavorite: this.favorites.has(symbol)
+      });
       this.saveFavoritesToStorage();
+
       return this.favorites.has(symbol);
     } catch (error) {
       console.error(`Failed to toggle favorite for ${symbol}:`, error);
@@ -193,9 +205,12 @@ class StockCache {
 
   async clear(): Promise<void> {
     try {
+      // Keep favorite stocks when clearing cache
       const favoriteStocks = await this.getFavorites();
       await this.db.stocks.clear();
-      await this.updateStocks(favoriteStocks);
+      if (favoriteStocks.length > 0) {
+        await this.updateStocks(favoriteStocks);
+      }
     } catch (error) {
       console.error('Failed to clear cache:', error);
     }
