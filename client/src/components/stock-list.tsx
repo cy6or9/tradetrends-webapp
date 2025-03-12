@@ -209,7 +209,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
 
   const handleToggleFavorite = useCallback(async (symbol: string) => {
     try {
-      // Update local state immediately
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (prev.has(symbol)) {
@@ -220,38 +219,19 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
 
-      // Find the stock in current data
       const currentData = queryClient.getQueryData(["/api/stocks", filters, forceUpdate]) as any;
       const allStocks = currentData?.pages?.flatMap((page: any) => page.stocks) || [];
       const currentStock = allStocks.find((s: any) => s.symbol === symbol);
 
       if (!currentStock) return;
 
-      // Persist the change
       await stockCache.toggleFavorite(symbol);
 
-      // If we're on favorites view, update the query data immediately
-      if (filters.isFavorite) {
-        const currentStocks = currentData?.pages?.[0]?.stocks || [];
-        const newStocks = favorites.has(symbol)
-          ? currentStocks.filter((s: any) => s.symbol !== symbol)
-          : [...currentStocks, { ...currentStock, isFavorite: true }];
+      // Immediately invalidate queries to refresh the data
+      await queryClient.invalidateQueries({ queryKey: ["/api/stocks"] });
 
-        queryClient.setQueryData(
-          ["/api/stocks", filters, forceUpdate],
-          {
-            pages: [{
-              stocks: newStocks,
-              hasMore: false,
-              total: newStocks.length
-            }],
-            pageParams: [1]
-          }
-        );
-      }
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
-      // Revert UI state on error
       setFavorites(prev => {
         const newFavorites = new Set(prev);
         if (newFavorites.has(symbol)) {
@@ -262,7 +242,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
         return newFavorites;
       });
     }
-  }, [filters.isFavorite, favorites, queryClient, forceUpdate]);
+  }, [filters, queryClient, forceUpdate]);
 
   const {
     data,
@@ -367,21 +347,15 @@ export function StockList({ filters, setStocks }: StockListProps) {
           </div>
         )}
         <div className="h-[600px] overflow-hidden relative">
-          {/* Scrollable container */}
           <div className="absolute inset-0 overflow-auto">
             <div className="min-w-[800px]">
-              {/* Table with sticky header */}
               <div className="relative">
-                <div className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 border-b border-border">
+                <div className="sticky top-0 z-40">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="sticky left-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 w-[120px] border-r border-border">
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleSort('symbol')}
-                            className="h-12 text-left font-medium w-full justify-between"
-                          >
+                      <TableRow className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+                        <TableHead className="sticky left-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95 border-r border-border w-[120px]">
+                          <Button variant="ghost" onClick={() => handleSort('symbol')} className="h-12 text-left font-medium w-full justify-between">
                             Symbol <ArrowUpDown className="h-4 w-4" />
                           </Button>
                         </TableHead>
@@ -454,7 +428,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   </Table>
                 </div>
 
-                {/* Scrollable table body */}
                 <Table>
                   <TableBody>
                     {sortedStocks.map((stock) => (
@@ -463,7 +436,7 @@ export function StockList({ filters, setStocks }: StockListProps) {
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => window.open(`/stock/${stock.symbol}`, '_blank')}
                       >
-                        <TableCell className="sticky left-0 bg-background border-r border-border w-[120px]">
+                        <TableCell className="sticky left-0 z-30 bg-background border-r border-border w-[120px]">
                           <div className="flex items-center gap-2">
                             <Button
                               variant="ghost"
@@ -521,7 +494,6 @@ export function StockList({ filters, setStocks }: StockListProps) {
                   </TableBody>
                 </Table>
 
-                {/* Load more indicator */}
                 <div ref={loadMoreRef} className="py-4 text-center">
                   {isFetchingNextPage && (
                     <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
