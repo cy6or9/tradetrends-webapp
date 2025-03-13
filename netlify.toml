@@ -1,5 +1,5 @@
 [build]
-  command = "vue-cli-service build"
+  command = "npx vue-cli-service build"
   publish = "dist/public"
   functions = "netlify/functions"
 
